@@ -127,7 +127,10 @@ export function InviteLandingPage() {
   if (inviteQuery.error || !invite) {
     return (
       <div className="mx-auto max-w-xl py-10">
-        <div className="rounded-lg border border-border bg-card p-6">
+        <div
+          className="rounded-lg border border-border bg-card p-6"
+          data-testid="invite-error"
+        >
           <h1 className="text-lg font-semibold">Invite not available</h1>
           <p className="mt-2 text-sm text-muted-foreground">
             This invite may be expired, revoked, or already used.
@@ -237,9 +240,16 @@ export function InviteLandingPage() {
     <div className="mx-auto max-w-xl py-10">
       <div className="rounded-lg border border-border bg-card p-6">
         <h1 className="text-xl font-semibold">
-          {invite.inviteType === "bootstrap_ceo" ? "Bootstrap your Paperclip instance" : "Join this Paperclip company"}
+          {invite.inviteType === "bootstrap_ceo"
+            ? "Bootstrap your Paperclip instance"
+            : invite.companyName
+              ? `Join ${invite.companyName}`
+              : "Join this Paperclip company"}
         </h1>
-        <p className="mt-2 text-sm text-muted-foreground">Invite expires {dateTime(invite.expiresAt)}.</p>
+        <p className="mt-2 text-sm text-muted-foreground">
+          {invite.companyName ? `You were invited to ${invite.companyName}. ` : ""}
+          Invite expires {dateTime(invite.expiresAt)}.
+        </p>
 
         {invite.inviteType !== "bootstrap_ceo" && (
           <div className="mt-5 flex gap-2">

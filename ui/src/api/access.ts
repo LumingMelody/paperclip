@@ -6,6 +6,7 @@ export type HumanCompanyRole = "owner" | "admin" | "operator" | "viewer";
 type InviteSummary = {
   id: string;
   companyId: string | null;
+  companyName?: string | null;
   inviteType: "company_join" | "bootstrap_ceo";
   allowedJoinTypes: "human" | "agent" | "both";
   humanRole?: HumanCompanyRole | null;

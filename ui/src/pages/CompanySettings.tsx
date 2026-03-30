@@ -475,7 +475,10 @@ export function CompanySettings() {
       </div>
 
       {/* Invites */}
-      <div className="space-y-4">
+      <div
+        className="space-y-4"
+        data-testid="company-settings-invites-section"
+      >
         <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
           Invites
         </div>
@@ -491,6 +494,7 @@ export function CompanySettings() {
               <>
                 <div className="flex flex-wrap items-center gap-2">
                   <select
+                    data-testid="company-settings-human-invite-role"
                     className="rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm outline-none"
                     value={humanInviteRole}
                     onChange={(e) => setHumanInviteRole(e.target.value as HumanCompanyRole)}
@@ -502,6 +506,7 @@ export function CompanySettings() {
                     ))}
                   </select>
                   <Button
+                    data-testid="company-settings-create-human-invite"
                     size="sm"
                     onClick={() => humanInviteMutation.mutate()}
                     disabled={humanInviteMutation.isPending}
@@ -521,6 +526,7 @@ export function CompanySettings() {
                       Human invite link
                     </div>
                     <textarea
+                      data-testid="company-settings-human-invite-url"
                       className="mt-1 h-24 w-full rounded-md border border-border bg-background px-2 py-1.5 font-mono text-xs outline-none"
                       value={humanInviteUrl}
                       readOnly
@@ -545,6 +551,7 @@ export function CompanySettings() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button
+              data-testid="company-settings-generate-openclaw-invite"
               size="sm"
               onClick={() => inviteMutation.mutate()}
               disabled={inviteMutation.isPending}
@@ -575,6 +582,7 @@ export function CompanySettings() {
               </div>
               <div className="mt-1 space-y-1.5">
                 <textarea
+                  data-testid="company-settings-openclaw-invite-snippet"
                   className="h-[28rem] w-full rounded-md border border-border bg-background px-2 py-1.5 font-mono text-xs outline-none"
                   value={inviteSnippet}
                   readOnly
@@ -603,11 +611,17 @@ export function CompanySettings() {
         </div>
       </div>
 
-      <div className="space-y-4">
+      <div
+        className="space-y-4"
+        data-testid="company-settings-team-section"
+      >
         <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
           Team
         </div>
-        <div className="space-y-3 rounded-md border border-border px-4 py-4">
+        <div
+          className="space-y-3 rounded-md border border-border px-4 py-4"
+          data-testid="company-settings-team-list"
+        >
           {membersQuery.isLoading ? (
             <p className="text-sm text-muted-foreground">Loading members...</p>
           ) : membersQuery.isError ? (
@@ -625,6 +639,7 @@ export function CompanySettings() {
                 <div
                   key={member.id}
                   className="flex flex-col gap-3 rounded-md border border-border/70 p-3"
+                  data-testid={`company-settings-member-${member.id}`}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
@@ -642,6 +657,7 @@ export function CompanySettings() {
                   <div className="flex flex-wrap items-center gap-2">
                     {canManageMembers ? (
                       <select
+                        data-testid={`company-settings-member-role-${member.id}`}
                         className="rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm outline-none"
                         value={member.membershipRole}
                         disabled={updatingMember}
@@ -666,6 +682,7 @@ export function CompanySettings() {
                     )}
                     {canManageMembers && (
                       <Button
+                        data-testid={`company-settings-member-status-${member.id}`}
                         size="sm"
                         variant="outline"
                         disabled={updatingMember}
