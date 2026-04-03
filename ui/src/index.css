@@ -319,6 +319,13 @@
   color: inherit;
 }
 
+@layer base {
+  .paperclip-mdxeditor [class*="_placeholder_"],
+  .paperclip-mdxeditor-content {
+    font-family: inherit;
+  }
+}
+
 .paperclip-edit-in-place-content {
   font-size: 0.9375rem;
   line-height: 1.75rem;
