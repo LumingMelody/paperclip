@@ -37,7 +37,7 @@ const inviteRoleOptions = [
   },
 ] as const;
 
-const INVITE_HISTORY_PAGE_SIZE = 20;
+const INVITE_HISTORY_PAGE_SIZE = 5;
 
 function isInviteHistoryRow(value: unknown): value is Awaited<ReturnType<typeof accessApi.listInvites>>["invites"][number] {
   if (!value || typeof value !== "object") return false;

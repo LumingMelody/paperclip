@@ -137,8 +137,8 @@ describe("CompanyInvites", () => {
     expect(container.textContent).toContain("Create invite");
     expect(container.textContent).toContain("Invite history");
     expect(container.textContent).toContain("Board User 25");
-    expect(container.textContent).toContain("Board User 6");
-    expect(container.textContent).not.toContain("Board User 5");
+    expect(container.textContent).toContain("Board User 21");
+    expect(container.textContent).not.toContain("Board User 20");
     expect(container.textContent).toContain("Review request");
     expect(container.textContent).toContain("View more");
     expect(container.textContent).not.toContain("Human or agent");
@@ -153,7 +153,7 @@ describe("CompanyInvites", () => {
     expect(container.textContent).toContain("Each invite link is single-use.");
     expect(container.textContent).toContain("Can create agents, invite users, assign tasks, and approve join requests.");
     expect(container.textContent).toContain("Everything in Admin, plus managing members and permission grants.");
-    expect(listInvitesMock).toHaveBeenCalledWith("company-1", { limit: 20, offset: 0 });
+    expect(listInvitesMock).toHaveBeenCalledWith("company-1", { limit: 5, offset: 0 });
 
     const viewMoreButton = Array.from(container.querySelectorAll("button")).find(
       (button) => button.textContent === "View more",
@@ -165,10 +165,10 @@ describe("CompanyInvites", () => {
     await flushReact();
     await flushReact();
 
-    expect(listInvitesMock).toHaveBeenCalledWith("company-1", { limit: 20, offset: 20 });
-    expect(container.textContent).toContain("Board User 5");
-    expect(container.textContent).toContain("Board User 1");
-    expect(container.textContent).not.toContain("View more");
+    expect(listInvitesMock).toHaveBeenCalledWith("company-1", { limit: 5, offset: 5 });
+    expect(container.textContent).toContain("Board User 20");
+    expect(container.textContent).toContain("Board User 16");
+    expect(container.textContent).toContain("View more");
 
     await act(async () => {
       const viewerRadio = container.querySelector('input[type="radio"][value="viewer"]') as HTMLInputElement | null;
@@ -249,13 +249,13 @@ describe("CompanyInvites", () => {
     await flushReact();
 
     expect(container.textContent).toContain("Board User 25");
-    expect(container.textContent).not.toContain("Board User 5");
-    expect(listInvitesMock).toHaveBeenCalledWith("company-1", { limit: 20, offset: 0 });
-    expect(queryClient.getQueryData(queryKeys.access.invites("company-1", "all", 20))).toMatchObject({
+    expect(container.textContent).not.toContain("Board User 20");
+    expect(listInvitesMock).toHaveBeenCalledWith("company-1", { limit: 5, offset: 0 });
+    expect(queryClient.getQueryData(queryKeys.access.invites("company-1", "all", 5))).toMatchObject({
       pages: [
         {
           invites: expect.any(Array),
-          nextOffset: 20,
+          nextOffset: 5,
         },
       ],
     });
