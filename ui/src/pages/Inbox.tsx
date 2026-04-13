@@ -23,6 +23,8 @@ import {
   countActiveIssueFilters,
   type IssueFilterState,
 } from "../lib/issue-filters";
+import { formatAssigneeUserLabel } from "../lib/assignees";
+import { buildCompanyUserLabelMap, buildCompanyUserProfileMap } from "../lib/company-members";
 import {
   armIssueDetailInboxQuickArchive,
   createIssueDetailLocationState,
@@ -829,7 +831,21 @@ export function Inbox() {
     enabled: !!selectedCompanyId,
     refetchInterval: 5000,
   });
+  const { data: companyMembers } = useQuery({
+    queryKey: queryKeys.access.companyMembers(selectedCompanyId!),
+    queryFn: () => accessApi.listMembers(selectedCompanyId!),
+    enabled: !!selectedCompanyId,
+  });
   const currentUserId = session?.user.id ?? session?.session.userId ?? null;
+
+  const companyUserLabelMap = useMemo(
+    () => buildCompanyUserLabelMap(companyMembers?.members),
+    [companyMembers?.members],
+  );
+  const companyUserProfileMap = useMemo(
+    () => buildCompanyUserProfileMap(companyMembers?.members),
+    [companyMembers?.members],
+  );
 
   const mineIssues = useMemo(() => getRecentTouchedIssues(mineIssuesRaw), [mineIssuesRaw]);
   const touchedIssues = useMemo(() => getRecentTouchedIssues(touchedIssuesRaw), [touchedIssuesRaw]);
@@ -1988,6 +2004,9 @@ export function Inbox() {
                   const isFading = fadingOutIssues.has(issue.id);
                   const isArchiving = archivingIssueIds.has(issue.id);
                   const project = issue.projectId ? projectById.get(issue.projectId) ?? null : null;
+                  const assigneeUserProfile = issue.assigneeUserId
+                    ? companyUserProfileMap.get(issue.assigneeUserId) ?? null
+                    : null;
                   return (
                     <IssueRow
                       key={`issue:${issue.id}`}
@@ -2064,6 +2083,12 @@ export function Inbox() {
                               defaultProjectWorkspaceIdByProjectId,
                             })}
                             assigneeName={agentName(issue.assigneeAgentId)}
+                            assigneeUserName={
+                              formatAssigneeUserLabel(issue.assigneeUserId, currentUserId, companyUserLabelMap)
+                              ?? assigneeUserProfile?.label
+                              ?? null
+                            }
+                            assigneeUserAvatarUrl={assigneeUserProfile?.image ?? null}
                             currentUserId={currentUserId}
                             parentIdentifier={issue.parentId ? (issueById.get(issue.parentId)?.identifier ?? null) : null}
                             parentTitle={issue.parentId ? (issueById.get(issue.parentId)?.title ?? null) : null}

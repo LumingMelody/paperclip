@@ -3,6 +3,11 @@ import type { InlineEntityOption } from "@/components/InlineEntitySelector";
 import type { MentionOption } from "@/components/MarkdownEditor";
 import type { Agent, Project } from "@paperclipai/shared";
 
+export interface CompanyUserProfile {
+  label: string;
+  image: string | null;
+}
+
 function fallbackUserLabel(userId: string): string {
   if (userId === "local-board") return "Board";
   return userId.slice(0, 5);
@@ -33,6 +38,19 @@ export function buildCompanyUserLabelMap(members: CompanyMember[] | null | undef
     labels.set(member.principalId, baseMemberLabel(member));
   }
   return labels;
+}
+
+export function buildCompanyUserProfileMap(
+  members: CompanyMember[] | null | undefined,
+): Map<string, CompanyUserProfile> {
+  const profiles = new Map<string, CompanyUserProfile>();
+  for (const member of members ?? []) {
+    profiles.set(member.principalId, {
+      label: baseMemberLabel(member),
+      image: member.user?.image ?? null,
+    });
+  }
+  return profiles;
 }
 
 export function buildCompanyUserInlineOptions(

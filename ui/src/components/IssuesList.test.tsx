@@ -26,6 +26,10 @@ const mockAuthApi = vi.hoisted(() => ({
   getSession: vi.fn(),
 }));
 
+const mockAccessApi = vi.hoisted(() => ({
+  listMembers: vi.fn(),
+}));
+
 const mockExecutionWorkspacesApi = vi.hoisted(() => ({
   list: vi.fn(),
 }));
@@ -48,6 +52,10 @@ vi.mock("../api/issues", () => ({
 
 vi.mock("../api/auth", () => ({
   authApi: mockAuthApi,
+}));
+
+vi.mock("../api/access", () => ({
+  accessApi: mockAccessApi,
 }));
 
 vi.mock("../api/execution-workspaces", () => ({
@@ -182,11 +190,13 @@ describe("IssuesList", () => {
     mockIssuesApi.list.mockReset();
     mockIssuesApi.listLabels.mockReset();
     mockAuthApi.getSession.mockReset();
+    mockAccessApi.listMembers.mockReset();
     mockExecutionWorkspacesApi.list.mockReset();
     mockInstanceSettingsApi.getExperimental.mockReset();
     mockIssuesApi.list.mockResolvedValue([]);
     mockIssuesApi.listLabels.mockResolvedValue([]);
     mockAuthApi.getSession.mockResolvedValue({ user: null, session: null });
+    mockAccessApi.listMembers.mockResolvedValue({ members: [], access: {} });
     mockExecutionWorkspacesApi.list.mockResolvedValue([]);
     mockInstanceSettingsApi.getExperimental.mockResolvedValue({ enableIsolatedWorkspaces: false });
     localStorage.clear();
@@ -307,6 +317,58 @@ describe("IssuesList", () => {
       expect(container.textContent).toContain("PAP-9");
       expect(container.textContent).toContain("Agent One");
       expect(container.textContent).not.toContain("Updated");
+    });
+
+    act(() => {
+      root.unmount();
+    });
+  });
+
+  it("shows human assignee names from company member profiles", async () => {
+    localStorage.setItem("paperclip:inbox:issue-columns", JSON.stringify(["id", "assignee"]));
+    mockAccessApi.listMembers.mockResolvedValue({
+      members: [
+        {
+          id: "member-1",
+          companyId: "company-1",
+          principalType: "user",
+          principalId: "user-2",
+          status: "active",
+          membershipRole: "operator",
+          createdAt: "2026-04-07T00:00:00.000Z",
+          updatedAt: "2026-04-07T00:00:00.000Z",
+          user: {
+            id: "user-2",
+            name: "Jordan Lee",
+            email: "jordan@example.com",
+            image: "https://example.com/jordan.png",
+          },
+          grants: [],
+        },
+      ],
+      access: {},
+    });
+
+    const assignedIssue = createIssue({
+      id: "issue-human",
+      identifier: "PAP-12",
+      title: "Human assigned issue",
+      assigneeUserId: "user-2",
+    });
+
+    const { root } = renderWithQueryClient(
+      <IssuesList
+        issues={[assignedIssue]}
+        agents={[]}
+        projects={[]}
+        viewStateKey="paperclip:test-issues"
+        onUpdateIssue={() => undefined}
+      />,
+      container,
+    );
+
+    await waitForAssertion(() => {
+      expect(container.textContent).toContain("Jordan Lee");
     });
 
     act(() => {

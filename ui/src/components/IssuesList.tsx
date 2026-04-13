@@ -1,5 +1,6 @@
 import { startTransition, useDeferredValue, useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { accessApi } from "../api/access";
 import { useDialog } from "../context/DialogContext";
 import { useCompany } from "../context/CompanyContext";
 import { executionWorkspacesApi } from "../api/execution-workspaces";
@@ -12,6 +13,7 @@ import {
   shouldBlurPageSearchOnEscape,
 } from "../lib/keyboardShortcuts";
 import { formatAssigneeUserLabel } from "../lib/assignees";
+import { buildCompanyUserLabelMap, buildCompanyUserProfileMap } from "../lib/company-members";
 import { groupBy } from "../lib/groupBy";
 import {
   applyIssueFilters,
@@ -224,6 +226,11 @@ export function IssuesList({
     queryKey: queryKeys.auth.session,
     queryFn: () => authApi.getSession(),
   });
+  const { data: companyMembers } = useQuery({
+    queryKey: queryKeys.access.companyMembers(selectedCompanyId!),
+    queryFn: () => accessApi.listMembers(selectedCompanyId!),
+    enabled: !!selectedCompanyId,
+  });
   const { data: experimentalSettings } = useQuery({
     queryKey: queryKeys.instance.experimentalSettings,
     queryFn: () => instanceSettingsApi.getExperimental(),
@@ -311,6 +318,15 @@ export function IssuesList({
     if (!id || !agents) return null;
     return agents.find((a) => a.id === id)?.name ?? null;
   }, [agents]);
+
+  const companyUserLabelMap = useMemo(
+    () => buildCompanyUserLabelMap(companyMembers?.members),
+    [companyMembers?.members],
+  );
+  const companyUserProfileMap = useMemo(
+    () => buildCompanyUserProfileMap(companyMembers?.members),
+    [companyMembers?.members],
+  );
 
   const projectById = useMemo(() => {
     const map = new Map<string, { name: string; color: string | null }>();
@@ -477,11 +493,11 @@ export function IssuesList({
         key === "__unassigned"
           ? "Unassigned"
           : key.startsWith("__user:")
-            ? (formatAssigneeUserLabel(key.slice("__user:".length), currentUserId) ?? "User")
+            ? (formatAssigneeUserLabel(key.slice("__user:".length), currentUserId, companyUserLabelMap) ?? "User")
             : (agentName(key) ?? key.slice(0, 8)),
       items: groups[key]!,
     }));
-  }, [filtered, viewState.groupBy, agents, agentName, currentUserId, workspaceNameMap, issueTitleMap]);
+  }, [filtered, viewState.groupBy, agents, agentName, currentUserId, workspaceNameMap, issueTitleMap, companyUserLabelMap]);
 
   const newIssueDefaults = useCallback((groupKey?: string) => {
     const defaults: Record<string, string> = {};
@@ -724,6 +740,14 @@ export function IssuesList({
                   const isExpanded = !viewState.collapsedParents.includes(issue.id);
                   const issueProject = issue.projectId ? projectById.get(issue.projectId) ?? null : null;
                   const parentIssue = issue.parentId ? issueById.get(issue.parentId) ?? null : null;
+                  const assigneeUserProfile = issue.assigneeUserId
+                    ? companyUserProfileMap.get(issue.assigneeUserId) ?? null
+                    : null;
+                  const assigneeUserLabel = formatAssigneeUserLabel(
+                    issue.assigneeUserId,
+                    currentUserId,
+                    companyUserLabelMap,
+                  ) ?? assigneeUserProfile?.label ?? null;
                   const toggleCollapse = (e: { preventDefault: () => void; stopPropagation: () => void }) => {
                     e.preventDefault();
                     e.stopPropagation();
@@ -797,6 +821,8 @@ export function IssuesList({
                               })}
                               onFilterWorkspace={filterToWorkspace}
                               assigneeName={agentName(issue.assigneeAgentId)}
+                              assigneeUserName={assigneeUserLabel}
+                              assigneeUserAvatarUrl={assigneeUserProfile?.image ?? null}
                               currentUserId={currentUserId}
                               parentIdentifier={parentIssue?.identifier ?? null}
                               parentTitle={parentIssue?.title ?? null}
@@ -816,12 +842,11 @@ export function IssuesList({
                                       {issue.assigneeAgentId && agentName(issue.assigneeAgentId) ? (
                                         <Identity name={agentName(issue.assigneeAgentId)!} size="sm" />
                                       ) : issue.assigneeUserId ? (
-                                        <span className="inline-flex items-center gap-1.5 text-xs">
-                                          <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-dashed border-muted-foreground/35 bg-muted/30">
-                                            <User className="h-3 w-3" />
-                                          </span>
-                                          {formatAssigneeUserLabel(issue.assigneeUserId, currentUserId) ?? "User"}
-                                        </span>
+                                        <Identity
+                                          name={assigneeUserLabel ?? "User"}
+                                          avatarUrl={assigneeUserProfile?.image ?? null}
+                                          size="sm"
+                                        />
                                       ) : (
                                         <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
                                           <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-dashed border-muted-foreground/35 bg-muted/30">

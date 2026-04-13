@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { CompanyMember } from "@/api/access";
-import { buildCompanyUserInlineOptions, buildCompanyUserLabelMap, buildMarkdownMentionOptions } from "./company-members";
+import {
+  buildCompanyUserInlineOptions,
+  buildCompanyUserLabelMap,
+  buildCompanyUserProfileMap,
+  buildMarkdownMentionOptions,
+} from "./company-members";
 
 const activeMember = (overrides: Partial<CompanyMember>): CompanyMember => ({
   id: overrides.id ?? "member-1",
@@ -26,6 +31,25 @@ describe("company-members helpers", () => {
 
     expect(labels.get("user-1")).toBe("Taylor");
     expect(labels.get("local-board")).toBe("Board");
+  });
+
+  it("builds user profiles with labels and avatars", () => {
+    const profiles = buildCompanyUserProfileMap([
+      activeMember({
+        principalId: "user-1",
+        user: { id: "user-1", name: "Taylor", email: "taylor@example.com", image: "https://example.com/taylor.png" },
+      }),
+      activeMember({ id: "member-2", principalId: "local-board", user: null }),
+    ]);
+
+    expect(profiles.get("user-1")).toEqual({
+      label: "Taylor",
+      image: "https://example.com/taylor.png",
+    });
+    expect(profiles.get("local-board")).toEqual({
+      label: "Board",
+      image: null,
+    });
   });
 
   it("builds inline options for active users and excludes requested ids", () => {
