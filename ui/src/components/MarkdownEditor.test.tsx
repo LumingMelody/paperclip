@@ -48,7 +48,6 @@ vi.mock("@mdxeditor/editor", async () => {
       placeholder?: string;
       onChange?: (value: string) => void;
       onError?: (error: unknown) => void;
-      className?: string;
       suppressHtmlProcessing?: boolean;
       className?: string;
     },
@@ -67,7 +66,7 @@ vi.mock("@mdxeditor/editor", async () => {
       if (!suppressHtmlProcessing && markdown.includes("<img ")) {
         setContent("");
         onError?.({
-          message: "Error parsing markdown: HTML-like formatting requires suppressHtmlProcessing",
+          error: "Error parsing markdown: HTML-like formatting requires suppressHtmlProcessing",
           source: markdown,
         });
         return;
@@ -279,11 +278,9 @@ describe("MarkdownEditor", () => {
     });
 
     await flush();
-
     await vi.waitFor(() => {
       expect(container.querySelector("textarea")).not.toBeNull();
     });
-
     const textarea = container.querySelector("textarea");
     expect(textarea).not.toBeNull();
     expect(textarea?.value).toBe("Affected versions: <= v0.3.1");
