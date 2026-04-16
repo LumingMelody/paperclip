@@ -400,6 +400,13 @@
       "when": 1775925298474,
       "tag": "0056_oval_gauntlet",
       "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "7",
+      "when": 1776377673907,
+      "tag": "0057_misty_riptide",
+      "breakpoints": true
     }
   ]
 }

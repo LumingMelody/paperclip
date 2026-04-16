@@ -2,11 +2,17 @@ import type {
   CreateMemoryBinding,
   MemoryBinding,
   MemoryBindingTarget,
+  MemoryCorrect,
+  MemoryCorrectResult,
   MemoryListOperationsQuery,
   MemoryListRecordsQuery,
   MemoryOperation,
   MemoryProviderDescriptor,
   MemoryRecord,
+  MemoryRetentionSweep,
+  MemoryRetentionSweepResult,
+  MemoryRevoke,
+  MemoryRevokeResult,
   MemoryResolvedBinding,
   SetAgentMemoryBinding,
   SetCompanyMemoryBinding,
@@ -14,11 +20,11 @@ import type {
 } from "@paperclipai/shared";
 import { api } from "./client";
 
-function buildQueryString(filters?: Record<string, string | number | boolean | undefined>) {
+function buildQueryString(filters?: Record<string, string | number | boolean | Date | undefined>) {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(filters ?? {})) {
     if (value === undefined) continue;
-    params.set(key, String(value));
+    params.set(key, value instanceof Date ? value.toISOString() : String(value));
   }
   const qs = params.toString();
   return qs ? `?${qs}` : "";
@@ -41,12 +47,24 @@ export const memoryApi = {
     api.get<MemoryResolvedBinding>(`/agents/${encodeURIComponent(agentId)}/memory-binding`),
   setAgentBinding: (agentId: string, bindingId: SetAgentMemoryBinding["bindingId"]) =>
     api.put<MemoryBindingTarget | null>(`/agents/${encodeURIComponent(agentId)}/memory-binding`, { bindingId }),
-  listRecords: (companyId: string, filters?: MemoryListRecordsQuery) =>
+  listRecords: (companyId: string, filters?: Partial<MemoryListRecordsQuery>) =>
     api.get<MemoryRecord[]>(
       `/companies/${encodeURIComponent(companyId)}/memory/records${buildQueryString(filters)}`,
     ),
   listOperations: (companyId: string, filters?: MemoryListOperationsQuery) =>
     api.get<MemoryOperation[]>(
       `/companies/${encodeURIComponent(companyId)}/memory/operations${buildQueryString(filters)}`,
+    ),
+  revoke: (companyId: string, data: MemoryRevoke) =>
+    api.post<MemoryRevokeResult>(`/companies/${encodeURIComponent(companyId)}/memory/revoke`, data),
+  correctRecord: (companyId: string, recordId: string, data: MemoryCorrect) =>
+    api.post<MemoryCorrectResult>(
+      `/companies/${encodeURIComponent(companyId)}/memory/records/${encodeURIComponent(recordId)}/correct`,
+      data,
+    ),
+  sweepRetention: (companyId: string, data: Partial<MemoryRetentionSweep> = {}) =>
+    api.post<MemoryRetentionSweepResult>(
+      `/companies/${encodeURIComponent(companyId)}/memory/retention/sweep`,
+      data,
     ),
 };

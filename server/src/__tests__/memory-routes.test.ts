@@ -21,6 +21,9 @@ const mockMemoryService = vi.hoisted(() => ({
   query: vi.fn(),
   capture: vi.fn(),
   forget: vi.fn(),
+  revoke: vi.fn(),
+  correct: vi.fn(),
+  sweepRetention: vi.fn(),
   listRecords: vi.fn(),
   getRecord: vi.fn(),
   listOperations: vi.fn(),
@@ -116,6 +119,87 @@ describe("memory routes", () => {
     expect(res.status).toBe(200);
     expect(mockMemoryService.getBindingById).toHaveBeenCalledWith(bindingId);
     expect(mockMemoryService.updateBinding).toHaveBeenCalledWith(bindingId, { enabled: false });
+    expect(mockLogActivity).toHaveBeenCalledOnce();
+  });
+
+  it("blocks scoped revocation for agent callers", async () => {
+    const app = createApp({
+      type: "agent",
+      agentId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      companyId: companyA,
+    });
+
+    const res = await request(app)
+      .post(`/api/companies/${companyA}/memory/revoke`)
+      .send({
+        selector: { recordIds: ["44444444-4444-4444-8444-444444444444"] },
+        reason: "Stale memory",
+      });
+
+    expect(res.status).toBe(403);
+    expect(mockMemoryService.revoke).not.toHaveBeenCalled();
+  });
+
+  it("routes board scoped revocation through memory service and activity log", async () => {
+    mockMemoryService.revoke.mockResolvedValue({
+      operations: [],
+      revokedRecordIds: ["44444444-4444-4444-8444-444444444444"],
+    });
+    const app = createApp({
+      type: "board",
+      userId: "board-user",
+      source: "session",
+      companyIds: [companyA],
+      isInstanceAdmin: false,
+    });
+
+    const res = await request(app)
+      .post(`/api/companies/${companyA}/memory/revoke`)
+      .set("Origin", "http://localhost:3100")
+      .send({
+        selector: { issueId: "55555555-5555-4555-8555-555555555555" },
+        reason: "Issue memory should be revoked",
+      });
+
+    expect(res.status).toBe(200);
+    expect(mockMemoryService.revoke).toHaveBeenCalledWith(
+      companyA,
+      {
+        selector: { issueId: "55555555-5555-4555-8555-555555555555" },
+        reason: "Issue memory should be revoked",
+      },
+      expect.objectContaining({ actorType: "user", userId: "board-user" }),
+    );
+    expect(mockLogActivity).toHaveBeenCalledOnce();
+  });
+
+  it("routes board correction through memory service", async () => {
+    const recordId = "44444444-4444-4444-8444-444444444444";
+    mockMemoryService.correct.mockResolvedValue({
+      operation: { id: "op-1" },
+      originalRecord: { id: recordId },
+      correctedRecord: { id: "66666666-6666-4666-8666-666666666666" },
+    });
+    const app = createApp({
+      type: "board",
+      userId: "board-user",
+      source: "session",
+      companyIds: [companyA],
+      isInstanceAdmin: false,
+    });
+
+    const res = await request(app)
+      .post(`/api/companies/${companyA}/memory/records/${recordId}/correct`)
+      .set("Origin", "http://localhost:3100")
+      .send({ content: "Corrected memory", reason: "User corrected stale fact" });
+
+    expect(res.status).toBe(201);
+    expect(mockMemoryService.correct).toHaveBeenCalledWith(
+      companyA,
+      recordId,
+      { content: "Corrected memory", reason: "User corrected stale fact" },
+      expect.objectContaining({ actorType: "user", userId: "board-user" }),
+    );
     expect(mockLogActivity).toHaveBeenCalledOnce();
   });
 });

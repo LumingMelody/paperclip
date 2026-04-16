@@ -4,16 +4,51 @@ import {
   MEMORY_HOOK_KINDS,
   MEMORY_OPERATION_STATUSES,
   MEMORY_OPERATION_TYPES,
+  MEMORY_PRINCIPAL_TYPES,
+  MEMORY_RETENTION_STATES,
+  MEMORY_SCOPE_TYPES,
+  MEMORY_SENSITIVITY_LABELS,
   MEMORY_SOURCE_KINDS,
 } from "../constants.js";
 
+export const memoryGovernedScopeSchema = z
+  .object({
+    type: z.enum(MEMORY_SCOPE_TYPES),
+    id: z.string().trim().min(1).max(200).nullable().optional(),
+  })
+  .strict();
+
+export const memoryPrincipalRefSchema = z
+  .object({
+    type: z.enum(MEMORY_PRINCIPAL_TYPES),
+    id: z.string().trim().min(1).max(200),
+  })
+  .strict();
+
+export const memoryCitationSchema = z
+  .object({
+    label: z.string().trim().max(200).nullable().optional(),
+    url: z.string().trim().max(1000).nullable().optional(),
+    excerpt: z.string().trim().max(2000).nullable().optional(),
+    sourceTitle: z.string().trim().max(300).nullable().optional(),
+    sourcePath: z.string().trim().max(1000).nullable().optional(),
+    metadata: z.record(z.unknown()).nullable().optional(),
+  })
+  .strict();
+
 export const memoryScopeSchema = z
   .object({
+    scopeType: z.enum(MEMORY_SCOPE_TYPES).nullable().optional(),
+    scopeId: z.string().trim().min(1).max(200).nullable().optional(),
     agentId: z.string().uuid().nullable().optional(),
+    workspaceId: z.string().trim().min(1).max(200).nullable().optional(),
     projectId: z.string().uuid().nullable().optional(),
     issueId: z.string().uuid().nullable().optional(),
     runId: z.string().uuid().nullable().optional(),
+    teamId: z.string().trim().min(1).max(200).nullable().optional(),
     subjectId: z.string().trim().max(200).nullable().optional(),
+    allowedScopes: z.array(memoryGovernedScopeSchema).max(20).nullable().optional(),
+    maxSensitivityLabel: z.enum(MEMORY_SENSITIVITY_LABELS).nullable().optional(),
   })
   .strict();
 
@@ -85,6 +120,13 @@ export const memoryCaptureSchema = z
     bindingKey: z.string().trim().min(1).max(64).optional(),
     scope: memoryScopeSchema.optional().default({}),
     source: memorySourceRefSchema,
+    scopeType: z.enum(MEMORY_SCOPE_TYPES).nullable().optional(),
+    scopeId: z.string().trim().min(1).max(200).nullable().optional(),
+    owner: memoryPrincipalRefSchema.nullable().optional(),
+    sensitivityLabel: z.enum(MEMORY_SENSITIVITY_LABELS).optional().default("internal"),
+    retentionPolicy: z.record(z.unknown()).nullable().optional(),
+    expiresAt: z.coerce.date().nullable().optional(),
+    citation: memoryCitationSchema.nullable().optional(),
     title: z.string().trim().max(200).nullable().optional(),
     content: z.string().trim().min(1).max(20000),
     summary: z.string().trim().max(2000).nullable().optional(),
@@ -96,17 +138,73 @@ export const memoryForgetSchema = z
   .object({
     recordIds: z.array(z.string().uuid()).min(1).max(100),
     scope: memoryScopeSchema.optional().default({}),
+    reason: z.string().trim().min(1).max(1000).optional(),
+  })
+  .strict();
+
+export const memoryRevokeSchema = z
+  .object({
+    selector: z
+      .object({
+        recordIds: z.array(z.string().uuid()).min(1).max(500).optional(),
+        source: memorySourceRefSchema.optional(),
+        runId: z.string().uuid().optional(),
+        issueId: z.string().uuid().optional(),
+        agentId: z.string().uuid().optional(),
+        workspaceId: z.string().trim().min(1).max(200).optional(),
+        projectId: z.string().uuid().optional(),
+        teamId: z.string().trim().min(1).max(200).optional(),
+        scopeType: z.enum(MEMORY_SCOPE_TYPES).optional(),
+        scopeId: z.string().trim().min(1).max(200).nullable().optional(),
+      })
+      .strict(),
+    reason: z.string().trim().min(1).max(1000),
+  })
+  .strict()
+  .refine((value) => Object.keys(value.selector).length > 0, "At least one revocation selector is required");
+
+export const memoryCorrectSchema = z
+  .object({
+    content: z.string().trim().min(1).max(20000),
+    summary: z.string().trim().max(2000).nullable().optional(),
+    title: z.string().trim().max(200).nullable().optional(),
+    reason: z.string().trim().min(1).max(1000),
+    sensitivityLabel: z.enum(MEMORY_SENSITIVITY_LABELS).optional(),
+    retentionPolicy: z.record(z.unknown()).nullable().optional(),
+    expiresAt: z.coerce.date().nullable().optional(),
+    citation: memoryCitationSchema.nullable().optional(),
+  })
+  .strict();
+
+export const memoryRetentionSweepSchema = z
+  .object({
+    now: z.coerce.date().optional(),
+    bindingId: z.string().uuid().optional(),
+    limit: z.number().int().positive().max(1000).optional().default(500),
   })
   .strict();
 
 export const memoryListRecordsQuerySchema = z
   .object({
     bindingId: z.string().uuid().optional(),
+    scopeType: z.enum(MEMORY_SCOPE_TYPES).optional(),
+    scopeId: z.string().trim().min(1).max(200).optional(),
+    ownerType: z.enum(MEMORY_PRINCIPAL_TYPES).optional(),
+    ownerId: z.string().trim().min(1).max(200).optional(),
+    sensitivityLabel: z.enum(MEMORY_SENSITIVITY_LABELS).optional(),
+    retentionState: z.enum(MEMORY_RETENTION_STATES).optional(),
+    expiresBefore: z.coerce.date().optional(),
     agentId: z.string().uuid().optional(),
+    workspaceId: z.string().trim().min(1).max(200).optional(),
     issueId: z.string().uuid().optional(),
+    projectId: z.string().uuid().optional(),
+    teamId: z.string().trim().min(1).max(200).optional(),
     runId: z.string().uuid().optional(),
     sourceKind: z.enum(MEMORY_SOURCE_KINDS).optional(),
     includeDeleted: z.coerce.boolean().optional().default(false),
+    includeRevoked: z.coerce.boolean().optional().default(false),
+    includeExpired: z.coerce.boolean().optional().default(false),
+    includeSuperseded: z.coerce.boolean().optional().default(false),
     limit: z.coerce.number().int().positive().max(200).optional().default(50),
   })
   .strict();
@@ -134,6 +232,9 @@ export const memoryListExtractionJobsQuerySchema = z
 export const memoryBindingTargetTypeSchema = z.enum(MEMORY_BINDING_TARGET_TYPES);
 
 export type MemoryScopeInput = z.infer<typeof memoryScopeSchema>;
+export type MemoryGovernedScopeInput = z.infer<typeof memoryGovernedScopeSchema>;
+export type MemoryPrincipalRefInput = z.infer<typeof memoryPrincipalRefSchema>;
+export type MemoryCitationInput = z.infer<typeof memoryCitationSchema>;
 export type MemorySourceRefInput = z.infer<typeof memorySourceRefSchema>;
 export type CreateMemoryBinding = z.infer<typeof createMemoryBindingSchema>;
 export type UpdateMemoryBinding = z.infer<typeof updateMemoryBindingSchema>;
@@ -142,6 +243,9 @@ export type SetAgentMemoryBinding = z.infer<typeof setAgentMemoryBindingSchema>;
 export type MemoryQuery = z.infer<typeof memoryQuerySchema>;
 export type MemoryCapture = z.infer<typeof memoryCaptureSchema>;
 export type MemoryForget = z.infer<typeof memoryForgetSchema>;
+export type MemoryRevoke = z.infer<typeof memoryRevokeSchema>;
+export type MemoryCorrect = z.infer<typeof memoryCorrectSchema>;
+export type MemoryRetentionSweep = z.infer<typeof memoryRetentionSweepSchema>;
 export type MemoryListRecordsQuery = z.infer<typeof memoryListRecordsQuerySchema>;
 export type MemoryListOperationsQuery = z.infer<typeof memoryListOperationsQuerySchema>;
 export type MemoryListExtractionJobsQuery = z.infer<typeof memoryListExtractionJobsQuerySchema>;

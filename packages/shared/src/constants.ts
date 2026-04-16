@@ -393,7 +393,17 @@ export type MemoryBindingTargetType = (typeof MEMORY_BINDING_TARGET_TYPES)[numbe
 export const MEMORY_PROVIDER_KINDS = ["builtin", "plugin"] as const;
 export type MemoryProviderKind = (typeof MEMORY_PROVIDER_KINDS)[number];
 
-export const MEMORY_OPERATION_TYPES = ["query", "capture", "upsert", "list", "get", "forget"] as const;
+export const MEMORY_OPERATION_TYPES = [
+  "query",
+  "capture",
+  "upsert",
+  "list",
+  "get",
+  "forget",
+  "revoke",
+  "correct",
+  "retention_sweep",
+] as const;
 export type MemoryOperationType = (typeof MEMORY_OPERATION_TYPES)[number];
 
 export const MEMORY_OPERATION_STATUSES = ["succeeded", "failed"] as const;
@@ -429,6 +439,18 @@ export const MEMORY_EXTRACTION_JOB_STATUSES = [
   "cancelled",
 ] as const;
 export type MemoryExtractionJobStatus = (typeof MEMORY_EXTRACTION_JOB_STATUSES)[number];
+
+export const MEMORY_SCOPE_TYPES = ["run", "agent", "workspace", "project", "team", "org"] as const;
+export type MemoryScopeType = (typeof MEMORY_SCOPE_TYPES)[number];
+
+export const MEMORY_PRINCIPAL_TYPES = ["agent", "user", "system", "team", "org"] as const;
+export type MemoryPrincipalType = (typeof MEMORY_PRINCIPAL_TYPES)[number];
+
+export const MEMORY_SENSITIVITY_LABELS = ["public", "internal", "confidential", "restricted"] as const;
+export type MemorySensitivityLabel = (typeof MEMORY_SENSITIVITY_LABELS)[number];
+
+export const MEMORY_RETENTION_STATES = ["active", "expired", "revoked"] as const;
+export type MemoryRetentionState = (typeof MEMORY_RETENTION_STATES)[number];
 
 // ---------------------------------------------------------------------------
 // Plugin System — see doc/plugins/PLUGIN_SPEC.md for the full specification

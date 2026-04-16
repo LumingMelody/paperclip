@@ -2,11 +2,14 @@ import { Router } from "express";
 import type { Db } from "@paperclipai/db";
 import {
   memoryCaptureSchema,
+  memoryCorrectSchema,
   memoryForgetSchema,
   memoryListExtractionJobsQuerySchema,
   memoryListOperationsQuerySchema,
   memoryListRecordsQuerySchema,
   memoryQuerySchema,
+  memoryRetentionSweepSchema,
+  memoryRevokeSchema,
   setAgentMemoryBindingSchema,
   setCompanyMemoryBindingSchema,
   updateMemoryBindingSchema,
@@ -230,15 +233,82 @@ export function memoryRoutes(
     const companyId = req.params.companyId as string;
     assertCompanyAccess(req, companyId);
     const parsed = memoryListRecordsQuerySchema.parse(req.query);
-    res.json(await memory.listRecords(companyId, parsed));
+    res.json(await memory.listRecords(companyId, parsed, actorInfoFromReq(req)));
   });
 
   router.get("/companies/:companyId/memory/records/:recordId", async (req, res) => {
     const companyId = req.params.companyId as string;
     assertCompanyAccess(req, companyId);
-    const record = await memory.getRecord(companyId, req.params.recordId as string);
+    const record = await memory.getRecord(companyId, req.params.recordId as string, actorInfoFromReq(req));
     if (!record) throw notFound("Memory record not found");
     res.json(record);
+  });
+
+  router.post("/companies/:companyId/memory/revoke", validate(memoryRevokeSchema), async (req, res) => {
+    const companyId = req.params.companyId as string;
+    assertCompanyAccess(req, companyId);
+    assertBoard(req);
+    const result = await memory.revoke(companyId, req.body, actorInfoFromReq(req));
+    const actor = getActorInfo(req);
+    await logActivity(db, {
+      companyId,
+      actorType: actor.actorType,
+      actorId: actor.actorId,
+      agentId: actor.agentId,
+      action: "memory.revoked",
+      entityType: "memory_record",
+      entityId: result.revokedRecordIds[0] ?? "none",
+      details: {
+        revokedRecordIds: result.revokedRecordIds,
+        selector: req.body.selector,
+        reason: req.body.reason,
+      },
+    });
+    res.json(result);
+  });
+
+  router.post("/companies/:companyId/memory/records/:recordId/correct", validate(memoryCorrectSchema), async (req, res) => {
+    const companyId = req.params.companyId as string;
+    assertCompanyAccess(req, companyId);
+    assertBoard(req);
+    const result = await memory.correct(companyId, req.params.recordId as string, req.body, actorInfoFromReq(req));
+    const actor = getActorInfo(req);
+    await logActivity(db, {
+      companyId,
+      actorType: actor.actorType,
+      actorId: actor.actorId,
+      agentId: actor.agentId,
+      action: "memory.corrected",
+      entityType: "memory_record",
+      entityId: result.correctedRecord.id,
+      details: {
+        originalRecordId: result.originalRecord.id,
+        correctedRecordId: result.correctedRecord.id,
+        reason: req.body.reason,
+      },
+    });
+    res.status(201).json(result);
+  });
+
+  router.post("/companies/:companyId/memory/retention/sweep", validate(memoryRetentionSweepSchema), async (req, res) => {
+    const companyId = req.params.companyId as string;
+    assertCompanyAccess(req, companyId);
+    assertBoard(req);
+    const result = await memory.sweepRetention(companyId, req.body, actorInfoFromReq(req));
+    const actor = getActorInfo(req);
+    await logActivity(db, {
+      companyId,
+      actorType: actor.actorType,
+      actorId: actor.actorId,
+      agentId: actor.agentId,
+      action: "memory.retention_swept",
+      entityType: "memory_record",
+      entityId: result.expiredRecordIds[0] ?? "none",
+      details: {
+        expiredRecordIds: result.expiredRecordIds,
+      },
+    });
+    res.json(result);
   });
 
   router.get("/companies/:companyId/memory/operations", async (req, res) => {

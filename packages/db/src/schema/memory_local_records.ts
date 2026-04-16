@@ -7,7 +7,13 @@ import { issues } from "./issues.js";
 import { heartbeatRuns } from "./heartbeat_runs.js";
 import { memoryBindings } from "./memory_bindings.js";
 import { memoryOperations } from "./memory_operations.js";
-import type { MemorySourceKind } from "@paperclipai/shared";
+import type {
+  MemoryPrincipalType,
+  MemoryRetentionState,
+  MemoryScopeType,
+  MemorySensitivityLabel,
+  MemorySourceKind,
+} from "@paperclipai/shared";
 
 export const memoryLocalRecords = pgTable(
   "memory_local_records",
@@ -21,6 +27,10 @@ export const memoryLocalRecords = pgTable(
     scopeIssueId: uuid("scope_issue_id").references(() => issues.id),
     scopeRunId: uuid("scope_run_id").references(() => heartbeatRuns.id),
     scopeSubjectId: text("scope_subject_id"),
+    scopeType: text("scope_type").$type<MemoryScopeType>().notNull().default("org"),
+    scopeId: text("scope_id"),
+    scopeWorkspaceId: text("scope_workspace_id"),
+    scopeTeamId: text("scope_team_id"),
     sourceKind: text("source_kind").$type<MemorySourceKind>(),
     sourceIssueId: uuid("source_issue_id").references(() => issues.id),
     sourceCommentId: uuid("source_comment_id"),
@@ -32,6 +42,21 @@ export const memoryLocalRecords = pgTable(
     content: text("content").notNull(),
     summary: text("summary"),
     metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
+    ownerType: text("owner_type").$type<MemoryPrincipalType>(),
+    ownerId: text("owner_id"),
+    createdByActorType: text("created_by_actor_type").$type<MemoryPrincipalType>(),
+    createdByActorId: text("created_by_actor_id"),
+    sensitivityLabel: text("sensitivity_label").$type<MemorySensitivityLabel>().notNull().default("internal"),
+    retentionPolicy: jsonb("retention_policy").$type<Record<string, unknown> | null>(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    retentionState: text("retention_state").$type<MemoryRetentionState>().notNull().default("active"),
+    citationJson: jsonb("citation_json").$type<Record<string, unknown> | null>(),
+    supersedesRecordId: uuid("supersedes_record_id"),
+    supersededByRecordId: uuid("superseded_by_record_id"),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    revokedByActorType: text("revoked_by_actor_type").$type<MemoryPrincipalType>(),
+    revokedByActorId: text("revoked_by_actor_id"),
+    revocationReason: text("revocation_reason"),
     createdByOperationId: uuid("created_by_operation_id").references(() => memoryOperations.id, { onDelete: "set null" }),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -51,6 +76,23 @@ export const memoryLocalRecords = pgTable(
     companyIssueCreatedIdx: index("memory_local_records_company_issue_created_idx").on(
       table.companyId,
       table.scopeIssueId,
+      table.createdAt,
+    ),
+    companyScopeCreatedIdx: index("memory_local_records_company_scope_created_idx").on(
+      table.companyId,
+      table.scopeType,
+      table.scopeId,
+      table.createdAt,
+    ),
+    companySensitivityCreatedIdx: index("memory_local_records_company_sensitivity_created_idx").on(
+      table.companyId,
+      table.sensitivityLabel,
+      table.createdAt,
+    ),
+    companyRetentionCreatedIdx: index("memory_local_records_company_retention_created_idx").on(
+      table.companyId,
+      table.retentionState,
+      table.expiresAt,
       table.createdAt,
     ),
     contentSearchIdx: index("memory_local_records_fts_idx").using(

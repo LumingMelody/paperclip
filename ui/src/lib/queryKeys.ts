@@ -35,7 +35,7 @@ export const queryKeys = {
     bindings: (companyId: string) => ["memory", companyId, "bindings"] as const,
     targets: (companyId: string) => ["memory", companyId, "targets"] as const,
     agentBinding: (agentId: string) => ["memory", "agent-binding", agentId] as const,
-    records: (companyId: string, filters?: Record<string, string | number | boolean | undefined>) =>
+    records: (companyId: string, filters?: Record<string, string | number | boolean | Date | undefined>) =>
       ["memory", companyId, "records", filters ?? {}] as const,
     operations: (companyId: string, filters?: Record<string, string | number | boolean | undefined>) =>
       ["memory", companyId, "operations", filters ?? {}] as const,

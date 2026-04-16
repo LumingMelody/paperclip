@@ -4,7 +4,11 @@ import type {
   MemoryHookKind,
   MemoryOperationStatus,
   MemoryOperationType,
+  MemoryPrincipalType,
   MemoryProviderKind,
+  MemoryRetentionState,
+  MemoryScopeType,
+  MemorySensitivityLabel,
   MemorySourceKind,
   MemoryTriggerKind,
 } from "../constants.js";
@@ -37,12 +41,37 @@ export interface MemoryUsage {
   details: Record<string, unknown> | null;
 }
 
+export interface MemoryGovernedScope {
+  type: MemoryScopeType;
+  id?: string | null;
+}
+
+export interface MemoryPrincipalRef {
+  type: MemoryPrincipalType;
+  id: string;
+}
+
+export interface MemoryCitation {
+  label?: string | null;
+  url?: string | null;
+  excerpt?: string | null;
+  sourceTitle?: string | null;
+  sourcePath?: string | null;
+  metadata?: Record<string, unknown> | null;
+}
+
 export interface MemoryScope {
+  scopeType?: MemoryScopeType | null;
+  scopeId?: string | null;
   agentId?: string | null;
+  workspaceId?: string | null;
   projectId?: string | null;
   issueId?: string | null;
   runId?: string | null;
+  teamId?: string | null;
   subjectId?: string | null;
+  allowedScopes?: MemoryGovernedScope[] | null;
+  maxSensitivityLabel?: MemorySensitivityLabel | null;
 }
 
 export interface MemorySourceRef {
@@ -96,6 +125,20 @@ export interface MemoryRecord {
   providerKey: string;
   scope: MemoryScope;
   source: MemorySourceRef | null;
+  scopeType: MemoryScopeType;
+  scopeId: string | null;
+  owner: MemoryPrincipalRef | null;
+  createdBy: MemoryPrincipalRef | null;
+  sensitivityLabel: MemorySensitivityLabel;
+  retentionPolicy: Record<string, unknown> | null;
+  expiresAt: Date | null;
+  retentionState: MemoryRetentionState;
+  citation: MemoryCitation | null;
+  supersedesRecordId: string | null;
+  supersededByRecordId: string | null;
+  revokedAt: Date | null;
+  revokedBy: MemoryPrincipalRef | null;
+  revocationReason: string | null;
   title: string | null;
   content: string;
   summary: string | null;
@@ -125,6 +168,9 @@ export interface MemoryOperation {
   recordCount: number;
   requestJson: Record<string, unknown> | null;
   resultJson: Record<string, unknown> | null;
+  policyDecision: Record<string, unknown> | null;
+  revocationSelector: Record<string, unknown> | null;
+  retentionAction: Record<string, unknown> | null;
   usage: MemoryUsage[];
   error: string | null;
   costEventId: string | null;
@@ -186,6 +232,14 @@ export interface MemoryProviderCaptureInput {
   binding: MemoryBinding;
   scope: MemoryScope;
   source: MemorySourceRef;
+  scopeType?: MemoryScopeType | null;
+  scopeId?: string | null;
+  owner?: MemoryPrincipalRef | null;
+  createdBy?: MemoryPrincipalRef | null;
+  sensitivityLabel?: MemorySensitivityLabel;
+  retentionPolicy?: Record<string, unknown> | null;
+  expiresAt?: string | Date | null;
+  citation?: MemoryCitation | null;
   title?: string | null;
   content: string;
   summary?: string | null;
@@ -208,4 +262,33 @@ export interface MemoryProviderForgetOutput {
   forgottenRecordIds: string[];
   usage?: MemoryUsage[];
   resultJson?: Record<string, unknown> | null;
+}
+
+export interface MemoryRevokeSelector {
+  recordIds?: string[];
+  source?: MemorySourceRef;
+  runId?: string;
+  issueId?: string;
+  agentId?: string;
+  workspaceId?: string;
+  projectId?: string;
+  teamId?: string;
+  scopeType?: MemoryScopeType;
+  scopeId?: string | null;
+}
+
+export interface MemoryRevokeResult {
+  operations: MemoryOperation[];
+  revokedRecordIds: string[];
+}
+
+export interface MemoryCorrectResult {
+  operation: MemoryOperation;
+  originalRecord: MemoryRecord;
+  correctedRecord: MemoryRecord;
+}
+
+export interface MemoryRetentionSweepResult {
+  operations: MemoryOperation[];
+  expiredRecordIds: string[];
 }

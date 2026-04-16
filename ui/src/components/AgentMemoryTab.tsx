@@ -28,6 +28,11 @@ function summarizeRecord(record: MemoryRecord) {
   return body.length > 280 ? `${body.slice(0, 277)}...` : body;
 }
 
+function governanceLabel(record: MemoryRecord) {
+  const scope = `${record.scopeType}${record.scopeId ? `:${record.scopeId.slice(0, 8)}` : ""}`;
+  return `${scope} • ${record.sensitivityLabel} • ${record.retentionState}`;
+}
+
 function operationCost(operation: MemoryOperation) {
   const total = operation.usage.reduce((sum, item) => sum + item.costCents, 0);
   return total > 0 ? formatCents(total) : "-";
@@ -134,6 +139,9 @@ export function AgentMemoryTab({
                 <div className="text-xs text-muted-foreground">
                   Automatic capture hooks write recent run summaries and issue context into the resolved binding.
                 </div>
+                <div className="text-xs text-muted-foreground">
+                  Hydration can read org memory plus this agent, issue, project, workspace, and run scopes when present. Restricted records are withheld from agent prompts unless explicitly allowed.
+                </div>
               </>
             )}
           </div>
@@ -185,8 +193,13 @@ export function AgentMemoryTab({
                   <div className="space-y-1">
                     <div className="text-sm font-medium">{record.title ?? describeRecordSource(record)}</div>
                     <div className="text-xs text-muted-foreground">
-                      {describeRecordSource(record)} • {relativeTime(record.createdAt)}
+                      {describeRecordSource(record)} • {governanceLabel(record)} • {relativeTime(record.createdAt)}
                     </div>
+                    {record.citation?.label || record.citation?.sourceTitle ? (
+                      <div className="text-xs text-muted-foreground">
+                        Citation: {record.citation.label ?? record.citation.sourceTitle}
+                      </div>
+                    ) : null}
                   </div>
                   <div className="text-xs text-muted-foreground">
                     {record.scope.issueId ? `Issue ${record.scope.issueId.slice(0, 8)}` : "No issue scope"}

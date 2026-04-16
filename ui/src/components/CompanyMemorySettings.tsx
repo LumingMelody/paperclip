@@ -2,8 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   MemoryBinding,
+  MemoryListRecordsQuery,
   MemoryProviderDescriptor,
+  MemoryRecord,
 } from "@paperclipai/shared";
+import { MEMORY_RETENTION_STATES, MEMORY_SCOPE_TYPES, MEMORY_SENSITIVITY_LABELS } from "@paperclipai/shared";
 import { memoryApi } from "../api/memory";
 import { useToast } from "../context/ToastContext";
 import { queryKeys } from "../lib/queryKeys";
@@ -58,6 +61,15 @@ function providerLabel(provider: MemoryProviderDescriptor | undefined, binding: 
 
 function providerDescription(provider: MemoryProviderDescriptor | undefined) {
   return provider?.description ?? "Memory provider";
+}
+
+function summarizeRecord(record: MemoryRecord) {
+  const text = (record.summary ?? record.content).replace(/\s+/g, " ").trim();
+  return text.length > 220 ? `${text.slice(0, 217)}...` : text;
+}
+
+function recordScopeLabel(record: MemoryRecord) {
+  return `${record.scopeType}${record.scopeId ? `:${record.scopeId.slice(0, 8)}` : ""}`;
 }
 
 function MemoryBindingCard({
@@ -229,6 +241,15 @@ export function CompanyMemorySettings({ companyId }: { companyId: string }) {
   const [enabled, setEnabled] = useState(true);
   const [makeDefault, setMakeDefault] = useState(true);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [recordScopeType, setRecordScopeType] = useState("");
+  const [recordSensitivity, setRecordSensitivity] = useState("");
+  const [recordRetentionState, setRecordRetentionState] = useState("");
+  const [includeRevoked, setIncludeRevoked] = useState(false);
+  const [includeExpired, setIncludeExpired] = useState(false);
+  const [revokeReasonById, setRevokeReasonById] = useState<Record<string, string>>({});
+  const [correctionRecord, setCorrectionRecord] = useState<MemoryRecord | null>(null);
+  const [correctionContent, setCorrectionContent] = useState("");
+  const [correctionReason, setCorrectionReason] = useState("");
 
   const providersQuery = useQuery({
     queryKey: queryKeys.memory.providers(companyId),
@@ -243,6 +264,22 @@ export function CompanyMemorySettings({ companyId }: { companyId: string }) {
   const targetsQuery = useQuery({
     queryKey: queryKeys.memory.targets(companyId),
     queryFn: () => memoryApi.listTargets(companyId),
+  });
+
+  const recordsFilters: Partial<MemoryListRecordsQuery> = {
+    includeDeleted: false,
+    scopeType: recordScopeType || undefined,
+    sensitivityLabel: recordSensitivity || undefined,
+    retentionState: recordRetentionState || undefined,
+    includeRevoked,
+    includeExpired,
+    includeSuperseded: false,
+    limit: 25,
+  } as Partial<MemoryListRecordsQuery>;
+
+  const recordsQuery = useQuery({
+    queryKey: queryKeys.memory.records(companyId, recordsFilters),
+    queryFn: () => memoryApi.listRecords(companyId, recordsFilters),
   });
 
   const providersByKey = useMemo(
@@ -319,6 +356,73 @@ export function CompanyMemorySettings({ companyId }: { companyId: string }) {
     onError: (error) => {
       pushToast({
         title: "Failed to update company memory default",
+        body: error instanceof Error ? error.message : "Unknown error",
+        tone: "error",
+      });
+    },
+  });
+
+  const revokeRecord = useMutation({
+    mutationFn: ({ recordId, reason }: { recordId: string; reason: string }) =>
+      memoryApi.revoke(companyId, { selector: { recordIds: [recordId] }, reason }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.memory.all });
+      pushToast({
+        title: "Memory record revoked",
+        body: "The record is now hidden from browse and prompt hydration by default.",
+        tone: "success",
+      });
+    },
+    onError: (error) => {
+      pushToast({
+        title: "Failed to revoke memory record",
+        body: error instanceof Error ? error.message : "Unknown error",
+        tone: "error",
+      });
+    },
+  });
+
+  const correctRecord = useMutation({
+    mutationFn: () => {
+      if (!correctionRecord) throw new Error("No memory record selected");
+      return memoryApi.correctRecord(companyId, correctionRecord.id, {
+        content: correctionContent,
+        reason: correctionReason,
+      });
+    },
+    onSuccess: async () => {
+      setCorrectionRecord(null);
+      setCorrectionContent("");
+      setCorrectionReason("");
+      await queryClient.invalidateQueries({ queryKey: queryKeys.memory.all });
+      pushToast({
+        title: "Memory record corrected",
+        body: "The original record was superseded and the correction is now the active memory.",
+        tone: "success",
+      });
+    },
+    onError: (error) => {
+      pushToast({
+        title: "Failed to correct memory record",
+        body: error instanceof Error ? error.message : "Unknown error",
+        tone: "error",
+      });
+    },
+  });
+
+  const sweepRetention = useMutation({
+    mutationFn: () => memoryApi.sweepRetention(companyId),
+    onSuccess: async (result) => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.memory.all });
+      pushToast({
+        title: "Retention sweep completed",
+        body: `${result.expiredRecordIds.length} expired record${result.expiredRecordIds.length === 1 ? "" : "s"} marked.`,
+        tone: "success",
+      });
+    },
+    onError: (error) => {
+      pushToast({
+        title: "Failed to sweep memory retention",
         body: error instanceof Error ? error.message : "Unknown error",
         tone: "error",
       });
@@ -449,6 +553,196 @@ export function CompanyMemorySettings({ companyId }: { companyId: string }) {
             </div>
           </>
         )}
+      </div>
+
+      <div className="space-y-4 rounded-md border border-border px-4 py-4">
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div className="space-y-1">
+            <h2 className="text-sm font-medium">Governed records</h2>
+            <p className="text-sm text-muted-foreground">
+              Inspect memory by scope, sensitivity, and retention state. Revoked, expired, and superseded records stay auditable but are excluded from hydration by default.
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={sweepRetention.isPending}
+            onClick={() => sweepRetention.mutate()}
+          >
+            {sweepRetention.isPending ? "Sweeping..." : "Sweep retention"}
+          </Button>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-3">
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground">Scope</label>
+            <select
+              value={recordScopeType}
+              onChange={(event) => setRecordScopeType(event.target.value)}
+              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none"
+            >
+              <option value="">Any scope</option>
+              {MEMORY_SCOPE_TYPES.map((scopeType) => (
+                <option key={scopeType} value={scopeType}>
+                  {scopeType}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground">Sensitivity</label>
+            <select
+              value={recordSensitivity}
+              onChange={(event) => setRecordSensitivity(event.target.value)}
+              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none"
+            >
+              <option value="">Any label</option>
+              {MEMORY_SENSITIVITY_LABELS.map((label) => (
+                <option key={label} value={label}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground">Retention</label>
+            <select
+              value={recordRetentionState}
+              onChange={(event) => setRecordRetentionState(event.target.value)}
+              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none"
+            >
+              <option value="">Active records</option>
+              {MEMORY_RETENTION_STATES.map((state) => (
+                <option key={state} value={state}>
+                  {state}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-4 text-sm">
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={includeRevoked}
+              onChange={(event) => setIncludeRevoked(event.target.checked)}
+            />
+            Include revoked
+          </label>
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={includeExpired}
+              onChange={(event) => setIncludeExpired(event.target.checked)}
+            />
+            Include expired
+          </label>
+        </div>
+
+        {recordsQuery.isLoading ? (
+          <p className="text-sm text-muted-foreground">Loading governed records...</p>
+        ) : recordsQuery.error ? (
+          <p className="text-sm text-destructive">{recordsQuery.error.message}</p>
+        ) : (recordsQuery.data ?? []).length === 0 ? (
+          <div className="rounded-md border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
+            No memory records match the current filters.
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {(recordsQuery.data ?? []).map((record) => {
+              const revokeReason = revokeReasonById[record.id] ?? "";
+              const canMutate = record.retentionState === "active" && !record.revokedAt && !record.supersededByRecordId;
+              return (
+                <div key={record.id} className="rounded-md border border-border px-4 py-3">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="min-w-0 space-y-1">
+                      <div className="text-sm font-medium">{record.title ?? record.source?.kind ?? "Memory record"}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {recordScopeLabel(record)} • {record.sensitivityLabel} • {record.retentionState}
+                        {record.expiresAt ? ` • expires ${new Date(record.expiresAt).toLocaleDateString()}` : ""}
+                      </div>
+                      {record.citation?.label || record.citation?.sourceTitle ? (
+                        <div className="text-xs text-muted-foreground">
+                          Citation: {record.citation.label ?? record.citation.sourceTitle}
+                        </div>
+                      ) : null}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={!canMutate}
+                        onClick={() => {
+                          setCorrectionRecord(record);
+                          setCorrectionContent(record.content);
+                          setCorrectionReason("");
+                        }}
+                      >
+                        Correct
+                      </Button>
+                    </div>
+                  </div>
+                  <p className="mt-2 text-sm text-foreground/90">{summarizeRecord(record)}</p>
+                  {canMutate ? (
+                    <div className="mt-3 grid gap-2 md:grid-cols-[1fr_auto] md:items-center">
+                      <Input
+                        value={revokeReason}
+                        onChange={(event) =>
+                          setRevokeReasonById((current) => ({ ...current, [record.id]: event.target.value }))
+                        }
+                        placeholder="Reason required to revoke"
+                      />
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={!revokeReason.trim() || revokeRecord.isPending}
+                        onClick={() => revokeRecord.mutate({ recordId: record.id, reason: revokeReason.trim() })}
+                      >
+                        Revoke
+                      </Button>
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {correctionRecord ? (
+          <div className="space-y-3 rounded-md border border-border bg-accent/20 px-4 py-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-medium">Correct memory record</h3>
+                <p className="text-xs text-muted-foreground">
+                  This creates a superseding record and keeps the original for audit history.
+                </p>
+              </div>
+              <Button size="sm" variant="ghost" onClick={() => setCorrectionRecord(null)}>
+                Cancel
+              </Button>
+            </div>
+            <Textarea
+              value={correctionContent}
+              onChange={(event) => setCorrectionContent(event.target.value)}
+              className="min-h-32"
+            />
+            <Input
+              value={correctionReason}
+              onChange={(event) => setCorrectionReason(event.target.value)}
+              placeholder="Correction reason"
+            />
+            <div className="flex justify-end">
+              <Button
+                size="sm"
+                disabled={!correctionContent.trim() || !correctionReason.trim() || correctRecord.isPending}
+                onClick={() => correctRecord.mutate()}
+              >
+                {correctRecord.isPending ? "Saving correction..." : "Save correction"}
+              </Button>
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );
