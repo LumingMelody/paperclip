@@ -237,6 +237,42 @@ describe("WorkspaceRuntimeControls", () => {
     act(() => root.unmount());
   });
 
+  it("can render square plain surfaces for embedded configuration pages", () => {
+    const sections = buildWorkspaceRuntimeControlSections({
+      runtimeConfig: {
+        commands: [
+          { id: "web", name: "web", kind: "service", command: "pnpm dev" },
+        ],
+      },
+      runtimeServices: [],
+      canStartServices: true,
+    });
+
+    const root = createRoot(container);
+    act(() => {
+      root.render(
+        <WorkspaceRuntimeControls
+          sections={sections}
+          square
+          onAction={vi.fn()}
+        />,
+      );
+    });
+
+    const summaryPanel = container.querySelector(".border.border-border\\/70");
+    const servicePanel = Array.from(container.querySelectorAll(".border.border-border\\/80"))
+      .find((element) => element.textContent?.includes("web"));
+    const startButton = Array.from(container.querySelectorAll("button"))
+      .find((button) => button.textContent?.trim() === "Start");
+
+    expect(summaryPanel?.className).toContain("rounded-none");
+    expect(summaryPanel?.className).not.toContain("bg-background/60");
+    expect(servicePanel?.className).toContain("rounded-none");
+    expect(startButton?.className).toContain("rounded-none");
+
+    act(() => root.unmount());
+  });
+
   it("accepts the legacy items prop without crashing", () => {
     const items = buildWorkspaceRuntimeControlItems({
       runtimeConfig: {

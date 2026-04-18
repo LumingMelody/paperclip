@@ -532,7 +532,7 @@ export function ExecutionWorkspaceDetail() {
           </p>
         </div>
 
-        <div className="rounded-2xl border border-border bg-card p-4 sm:p-5">
+        <div className="border border-border bg-background p-4 sm:p-5">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div className="space-y-1">
               <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Workspace commands</div>
@@ -548,6 +548,7 @@ export function ExecutionWorkspaceDetail() {
           </div>
           <WorkspaceRuntimeControls
             className="mt-4"
+            square
             sections={runtimeControlSections}
             isPending={controlRuntimeServices.isPending}
             pendingRequest={pendingRuntimeAction}
@@ -583,7 +584,7 @@ export function ExecutionWorkspaceDetail() {
 
         {activeTab === "configuration" ? (
           <div className="space-y-4 sm:space-y-6">
-            <div className="rounded-2xl border border-border bg-card p-4 sm:p-5">
+            <div className="border border-border bg-background p-4 sm:p-5">
               <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
                 <div className="space-y-1">
                   <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
@@ -595,8 +596,8 @@ export function ExecutionWorkspaceDetail() {
                   </p>
                 </div>
                 <Button
-                  variant="outline"
-                  className="w-full sm:w-auto"
+                  variant="destructive"
+                  className="w-full rounded-none sm:w-auto"
                   onClick={() => setCloseDialogOpen(true)}
                   disabled={workspace.status === "archived"}
                 >
@@ -609,7 +610,7 @@ export function ExecutionWorkspaceDetail() {
               <div className="space-y-4">
                 <Field label="Workspace name">
                   <input
-                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none"
+                    className="w-full rounded-none border border-border bg-background px-3 py-2 text-sm outline-none"
                     value={form.name}
                     onChange={(event) => setForm((current) => current ? { ...current, name: event.target.value } : current)}
                     placeholder="Execution workspace name"
@@ -618,7 +619,7 @@ export function ExecutionWorkspaceDetail() {
 
                 <Field label="Branch name" hint="Useful for isolated worktrees">
                   <input
-                    className="w-full rounded-lg border border-border bg-background px-3 py-2 font-mono text-sm outline-none"
+                    className="w-full rounded-none border border-border bg-background px-3 py-2 font-mono text-sm outline-none"
                     value={form.branchName}
                     onChange={(event) => setForm((current) => current ? { ...current, branchName: event.target.value } : current)}
                     placeholder="PAP-946-workspace"
@@ -627,7 +628,7 @@ export function ExecutionWorkspaceDetail() {
 
                 <Field label="Working directory">
                   <input
-                    className="w-full rounded-lg border border-border bg-background px-3 py-2 font-mono text-sm outline-none"
+                    className="w-full rounded-none border border-border bg-background px-3 py-2 font-mono text-sm outline-none"
                     value={form.cwd}
                     onChange={(event) => setForm((current) => current ? { ...current, cwd: event.target.value } : current)}
                     placeholder="/absolute/path/to/workspace"
@@ -636,7 +637,7 @@ export function ExecutionWorkspaceDetail() {
 
                 <Field label="Provider path / ref">
                   <input
-                    className="w-full rounded-lg border border-border bg-background px-3 py-2 font-mono text-sm outline-none"
+                    className="w-full rounded-none border border-border bg-background px-3 py-2 font-mono text-sm outline-none"
                     value={form.providerRef}
                     onChange={(event) => setForm((current) => current ? { ...current, providerRef: event.target.value } : current)}
                     placeholder="/path/to/worktree or provider ref"
@@ -645,7 +646,7 @@ export function ExecutionWorkspaceDetail() {
 
                 <Field label="Repo URL">
                   <input
-                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none"
+                    className="w-full rounded-none border border-border bg-background px-3 py-2 text-sm outline-none"
                     value={form.repoUrl}
                     onChange={(event) => setForm((current) => current ? { ...current, repoUrl: event.target.value } : current)}
                     placeholder="https://github.com/org/repo"
@@ -654,7 +655,7 @@ export function ExecutionWorkspaceDetail() {
 
                 <Field label="Base ref">
                   <input
-                    className="w-full rounded-lg border border-border bg-background px-3 py-2 font-mono text-sm outline-none"
+                    className="w-full rounded-none border border-border bg-background px-3 py-2 font-mono text-sm outline-none"
                     value={form.baseRef}
                     onChange={(event) => setForm((current) => current ? { ...current, baseRef: event.target.value } : current)}
                     placeholder="origin/main"
@@ -663,7 +664,7 @@ export function ExecutionWorkspaceDetail() {
 
                 <Field label="Provision command" hint="Runs when Paperclip prepares this execution workspace">
                   <textarea
-                    className="min-h-20 w-full rounded-lg border border-border bg-background px-3 py-2 font-mono text-sm outline-none sm:min-h-28"
+                    className="min-h-20 w-full rounded-none border border-border bg-background px-3 py-2 font-mono text-sm outline-none sm:min-h-28"
                     value={form.provisionCommand}
                     onChange={(event) => setForm((current) => current ? { ...current, provisionCommand: event.target.value } : current)}
                     placeholder="bash ./scripts/provision-worktree.sh"
@@ -672,7 +673,7 @@ export function ExecutionWorkspaceDetail() {
 
                 <Field label="Teardown command" hint="Runs when the execution workspace is archived or cleaned up">
                   <textarea
-                    className="min-h-20 w-full rounded-lg border border-border bg-background px-3 py-2 font-mono text-sm outline-none sm:min-h-28"
+                    className="min-h-20 w-full rounded-none border border-border bg-background px-3 py-2 font-mono text-sm outline-none sm:min-h-28"
                     value={form.teardownCommand}
                     onChange={(event) => setForm((current) => current ? { ...current, teardownCommand: event.target.value } : current)}
                     placeholder="bash ./scripts/teardown-worktree.sh"
@@ -681,14 +682,14 @@ export function ExecutionWorkspaceDetail() {
 
                 <Field label="Cleanup command" hint="Workspace-specific cleanup before teardown">
                   <textarea
-                    className="min-h-16 w-full rounded-lg border border-border bg-background px-3 py-2 font-mono text-sm outline-none sm:min-h-24"
+                    className="min-h-16 w-full rounded-none border border-border bg-background px-3 py-2 font-mono text-sm outline-none sm:min-h-24"
                     value={form.cleanupCommand}
                     onChange={(event) => setForm((current) => current ? { ...current, cleanupCommand: event.target.value } : current)}
                     placeholder="pkill -f vite || true"
                   />
                 </Field>
 
-                <div className="rounded-xl border border-dashed border-border/70 bg-muted/20 px-3 py-3">
+                <div className="border border-dashed border-border/70 bg-background px-3 py-3">
                   <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
                     <div>
                       <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
@@ -704,7 +705,7 @@ export function ExecutionWorkspaceDetail() {
                     </div>
                     <Button
                       variant="outline"
-                      className="w-full sm:w-auto"
+                      className="w-full rounded-none sm:w-auto"
                       size="sm"
                       disabled={!linkedProjectWorkspace?.runtimeConfig?.workspaceRuntime}
                       onClick={() =>
@@ -720,7 +721,7 @@ export function ExecutionWorkspaceDetail() {
                   </div>
                 </div>
 
-                <details className="rounded-xl border border-dashed border-border/70 bg-muted/20 px-3 py-3">
+                <details className="border border-dashed border-border/70 bg-background px-3 py-3">
                   <summary className="cursor-pointer text-sm font-medium">Advanced runtime JSON</summary>
                   <p className="mt-2 text-sm text-muted-foreground">
                     Override the inherited workspace command model only when this execution workspace truly needs different service or job behavior.
@@ -746,7 +747,7 @@ export function ExecutionWorkspaceDetail() {
                         <label htmlFor="inherit-runtime-config">Inherit project workspace runtime config</label>
                       </div>
                       <textarea
-                        className="min-h-64 w-full rounded-lg border border-border bg-background px-3 py-2 font-mono text-sm outline-none disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-96"
+                        className="min-h-64 w-full rounded-none border border-border bg-background px-3 py-2 font-mono text-sm outline-none disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-96"
                         value={form.workspaceRuntime}
                         onChange={(event) => setForm((current) => current ? { ...current, workspaceRuntime: event.target.value } : current)}
                         disabled={form.inheritRuntime}
@@ -758,13 +759,13 @@ export function ExecutionWorkspaceDetail() {
               </div>
 
               <div className="mt-5 flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-                <Button className="w-full sm:w-auto" disabled={!isDirty || updateWorkspace.isPending} onClick={saveChanges}>
+                <Button className="w-full rounded-none sm:w-auto" disabled={!isDirty || updateWorkspace.isPending} onClick={saveChanges}>
                   {updateWorkspace.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                   Save changes
                 </Button>
                 <Button
                   variant="outline"
-                  className="w-full sm:w-auto"
+                  className="w-full rounded-none sm:w-auto"
                   disabled={!isDirty || updateWorkspace.isPending}
                   onClick={() => {
                     setForm(initialState);
@@ -780,7 +781,7 @@ export function ExecutionWorkspaceDetail() {
               </div>
             </div>
 
-            <div className="rounded-2xl border border-border bg-card p-4 sm:p-5">
+            <div className="border border-border bg-background p-4 sm:p-5">
               <div className="space-y-1">
                 <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Linked objects</div>
                 <h2 className="text-lg font-semibold">Workspace context</h2>
@@ -825,7 +826,7 @@ export function ExecutionWorkspaceDetail() {
               </DetailRow>
             </div>
 
-            <div className="rounded-2xl border border-border bg-card p-4 sm:p-5">
+            <div className="border border-border bg-background p-4 sm:p-5">
               <div className="space-y-1">
                 <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Paths and refs</div>
                 <h2 className="text-lg font-semibold">Concrete location</h2>
@@ -870,7 +871,7 @@ export function ExecutionWorkspaceDetail() {
             </div>
           </div>
         ) : activeTab === "runtime_logs" ? (
-          <div className="rounded-2xl border border-border bg-card p-4 sm:p-5">
+          <div className="border border-border bg-background p-4 sm:p-5">
             <div className="space-y-1">
               <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Recent operations</div>
               <h2 className="text-lg font-semibold">Runtime and cleanup logs</h2>
@@ -887,7 +888,7 @@ export function ExecutionWorkspaceDetail() {
             ) : workspaceOperationsQuery.data && workspaceOperationsQuery.data.length > 0 ? (
               <div className="space-y-3">
                 {workspaceOperationsQuery.data.map((operation) => (
-                  <div key={operation.id} className="rounded-xl border border-border/80 bg-background px-3 py-2">
+                  <div key={operation.id} className="border border-border/80 bg-background px-3 py-2">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div className="space-y-1">
                         <div className="text-sm font-medium">{operation.command ?? operation.phase}</div>
