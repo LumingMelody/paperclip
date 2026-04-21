@@ -103,24 +103,24 @@ function statusClasses(status: IssueThreadInteraction["status"]) {
     case "accepted":
     case "answered":
       return {
-        shell: "border-emerald-300/80 bg-card",
-        badge: "border-emerald-400/60 bg-emerald-100/80 text-emerald-950",
+        shell: "border-emerald-400/70 bg-transparent",
+        badge: "border-emerald-500/60 bg-emerald-500/10 text-emerald-900 dark:bg-emerald-500/15 dark:text-emerald-100",
       };
     case "rejected":
       return {
-        shell: "border-rose-300/80 bg-card",
-        badge: "border-rose-400/60 bg-rose-100/85 text-rose-950",
+        shell: "border-rose-400/70 bg-transparent",
+        badge: "border-rose-500/60 bg-rose-500/10 text-rose-900 dark:bg-rose-500/15 dark:text-rose-100",
       };
     case "failed":
     case "expired":
       return {
-        shell: "border-amber-300/80 bg-card",
-        badge: "border-amber-400/60 bg-amber-100/85 text-amber-950",
+        shell: "border-amber-400/70 bg-transparent",
+        badge: "border-amber-500/60 bg-amber-500/10 text-amber-900 dark:bg-amber-500/15 dark:text-amber-100",
       };
     default:
       return {
-        shell: "border-border bg-card",
-        badge: "border-sky-400/60 bg-sky-100/85 text-sky-950",
+        shell: "border-sky-500/70 bg-transparent",
+        badge: "border-sky-500/70 bg-sky-500/10 text-sky-900 dark:bg-sky-500/15 dark:text-sky-100",
       };
   }
 }
@@ -139,8 +139,8 @@ function TaskField({
       className={cn(
         "inline-flex items-center rounded-sm border px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.16em]",
         tone === "default"
-          ? "border-border/70 bg-background/80 text-foreground"
-          : "border-border/60 bg-background/60 text-muted-foreground",
+          ? "border-border/70 bg-transparent text-foreground"
+          : "border-border/60 bg-transparent text-muted-foreground",
       )}
     >
       {label}: {value}
@@ -196,24 +196,24 @@ function TaskTreeNode({
   const hasExplicitAssignee = Boolean(
     node.task.assigneeAgentId || node.task.assigneeUserId,
   );
+  const labels = node.task.labels ?? [];
+  const hasMetadata = hasExplicitAssignee
+    || Boolean(node.task.billingCode)
+    || Boolean(node.task.projectId)
+    || labels.length > 0;
 
   return (
-    <div className={cn("space-y-2", depth > 0 && "relative pl-6")}>
-      {depth > 0 ? (
-        <span
-          aria-hidden="true"
-          className="absolute left-2 top-0 h-full w-px bg-border"
-        />
-      ) : null}
+    <>
       <div
         className={cn(
-          "rounded-md border border-border/70 bg-muted/35 px-3 py-3 shadow-none",
-          depth > 0 && "relative before:absolute before:-left-4 before:top-5 before:h-px before:w-4 before:bg-border",
+          "relative border-b border-border/60 px-3 py-2.5 last:border-b-0",
+          depth > 0 && "before:absolute before:left-3 before:top-0 before:h-full before:w-px before:bg-border/70",
         )}
+        style={depth > 0 ? { paddingLeft: `${depth * 24 + 12}px` } : undefined}
       >
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
-            <div className="flex items-start gap-2.5">
+            <div className="flex items-start gap-2">
               {showSelection ? (
                 <Checkbox
                   checked={isSelected}
@@ -222,7 +222,7 @@ function TaskTreeNode({
                   className="mt-0.5"
                 />
               ) : null}
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <div className="flex min-w-0 items-center gap-1.5">
                   {node.task.priority ? (
                     <PriorityIcon
@@ -235,12 +235,12 @@ function TaskTreeNode({
                   </div>
                 </div>
                 {depth > 0 ? (
-                  <div className="mt-0.5 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                  <div className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
                     Child task
                   </div>
                 ) : null}
                 {node.task.description ? (
-                  <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                  <p className="mt-0.5 text-sm leading-5 text-muted-foreground">
                     {node.task.description}
                   </p>
                 ) : null}
@@ -251,35 +251,37 @@ function TaskTreeNode({
           {createdTask?.issueId ? (
             <Link
               to={`/issues/${createdTask.identifier ?? createdTask.issueId}`}
-              className="inline-flex shrink-0 items-center gap-1 rounded-sm border border-emerald-400/50 bg-emerald-100/80 px-2.5 py-1 text-[11px] font-medium text-emerald-950 transition-colors hover:bg-emerald-200/80"
+              className="inline-flex shrink-0 items-center gap-1 rounded-sm border border-emerald-500/50 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-900 transition-colors hover:bg-emerald-500/15 dark:text-emerald-100"
             >
               {createdTask.identifier ?? createdTask.issueId.slice(0, 8)}
               <ChevronRight className="h-3 w-3" />
             </Link>
           ) : isSkipped ? (
-            <span className="inline-flex shrink-0 items-center rounded-sm border border-amber-300/70 bg-amber-100/80 px-2.5 py-1 text-[11px] font-medium text-amber-950">
+            <span className="inline-flex shrink-0 items-center rounded-sm border border-amber-500/60 bg-amber-500/10 px-2.5 py-1 text-[11px] font-medium text-amber-900 dark:text-amber-100">
               Skipped
             </span>
           ) : null}
         </div>
 
-        <div className="mt-3 flex flex-wrap gap-2">
-          {hasExplicitAssignee ? (
-            <TaskField label="Assignee" value={assigneeLabel} />
-          ) : null}
-          {node.task.billingCode ? (
-            <TaskField label="Billing" value={node.task.billingCode} />
-          ) : null}
-          {node.task.projectId ? (
-            <TaskField label="Project" value={node.task.projectId} tone="subtle" />
-          ) : null}
-          {(node.task.labels ?? []).map((label) => (
-            <TaskField key={label} label="Label" value={label} tone="subtle" />
-          ))}
-        </div>
+        {hasMetadata ? (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {hasExplicitAssignee ? (
+              <TaskField label="Assignee" value={assigneeLabel} />
+            ) : null}
+            {node.task.billingCode ? (
+              <TaskField label="Billing" value={node.task.billingCode} />
+            ) : null}
+            {node.task.projectId ? (
+              <TaskField label="Project" value={node.task.projectId} tone="subtle" />
+            ) : null}
+            {labels.map((label) => (
+              <TaskField key={label} label="Label" value={label} tone="subtle" />
+            ))}
+          </div>
+        ) : null}
 
         {hiddenChildCount > 0 ? (
-          <div className="mt-3 flex items-center gap-2 rounded-md border border-amber-300/60 bg-amber-50/85 px-3 py-2 text-xs text-amber-900">
+          <div className="mt-2 flex items-center gap-2 rounded-sm border border-amber-500/60 bg-amber-500/10 px-3 py-2 text-xs text-amber-900 dark:text-amber-100">
             <GitBranch className="h-3.5 w-3.5 shrink-0" />
             <span>
               {hiddenChildCount === 1
@@ -291,7 +293,7 @@ function TaskTreeNode({
       </div>
 
       {visibleChildren.length > 0 ? (
-        <div className="space-y-2">
+        <>
           {visibleChildren.map((child) => (
             <TaskTreeNode
               key={child.task.clientKey}
@@ -307,9 +309,9 @@ function TaskTreeNode({
               onToggleSelection={onToggleSelection}
             />
           ))}
-        </div>
+        </>
       ) : null}
-    </div>
+    </>
   );
 }
 
@@ -430,7 +432,7 @@ function SuggestTasksCard({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
         <span>{totalTasks === 1 ? "1 draft issue" : `${totalTasks} draft issues`}</span>
         {interaction.payload.defaultParentId ? (
@@ -438,7 +440,7 @@ function SuggestTasksCard({
         ) : null}
       </div>
 
-      <div className="space-y-3">
+      <div className="overflow-hidden border border-border/70">
         {roots.map((root) => (
           <TaskTreeNode
             key={root.task.clientKey}
@@ -456,7 +458,7 @@ function SuggestTasksCard({
       </div>
 
       {interaction.status === "accepted" ? (
-        <div className="rounded-md border border-emerald-300/60 bg-emerald-50/85 px-4 py-3 text-sm text-emerald-950">
+        <div className="rounded-sm border border-emerald-500/60 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-900 dark:text-emerald-100">
           <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-emerald-700">
             Resolution summary
           </div>
@@ -469,7 +471,7 @@ function SuggestTasksCard({
       ) : null}
 
       {interaction.status === "rejected" ? (
-        <div className="rounded-md border border-rose-300/60 bg-rose-50/85 px-4 py-3 text-sm text-rose-950">
+        <div className="rounded-sm border border-rose-500/60 bg-rose-500/10 px-4 py-3 text-sm text-rose-900 dark:text-rose-100">
           <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-rose-700">
             Rejection reason
           </div>
@@ -830,7 +832,7 @@ export function IssueThreadInteractionCard({
       : null;
 
   return (
-    <div className={cn("rounded-md border p-5 shadow-[0_18px_48px_rgba(15,23,42,0.08)]", styles.shell)}>
+    <div className={cn("rounded-sm border p-5 shadow-none", styles.shell)}>
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0 flex-1 basis-64">
           <div className="flex flex-wrap items-center gap-2">
@@ -841,7 +843,7 @@ export function IssueThreadInteractionCard({
               {statusLabel(interaction.status)}
             </span>
             {interaction.continuationPolicy === "wake_assignee" ? (
-              <span className="inline-flex items-center gap-1 rounded-sm border border-border/70 bg-background/80 px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.16em] text-foreground/70">
+              <span className="inline-flex items-center gap-1 rounded-sm border border-border/70 bg-transparent px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.16em] text-foreground/70">
                 <ListChecks className="h-3.5 w-3.5" />
                 Wakes assignee
               </span>
@@ -863,7 +865,7 @@ export function IssueThreadInteractionCard({
 
         <Tooltip>
           <TooltipTrigger asChild>
-            <div className="rounded-md border border-border/70 bg-background/80 px-3 py-2 text-right text-xs text-muted-foreground">
+            <div className="rounded-sm border border-border/70 bg-transparent px-3 py-2 text-right text-xs text-muted-foreground">
               <div className="font-medium text-foreground">{formatShortDate(interaction.createdAt)}</div>
               <div>proposed by {createdByLabel}</div>
             </div>
