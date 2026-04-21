@@ -541,4 +541,156 @@ describeEmbeddedPostgres("applyPendingMigrations", () => {
     },
     20_000,
   );
+
+  it(
+    "replays migration 0064 safely when legacy memory-job constraints still exist",
+    async () => {
+      const connectionString = await createTempDatabase();
+
+      await applyPendingMigrations(connectionString);
+
+      const sql = postgres(connectionString, { max: 1, onnotice: () => {} });
+      try {
+        const memoryJobCompatHash = await migrationHash("0064_memory_job_legacy_compat.sql");
+
+        await sql.unsafe(`
+          CREATE TABLE IF NOT EXISTS "memory_bindings" (
+            "id" uuid PRIMARY KEY
+          )
+        `);
+        await sql.unsafe(`
+          CREATE TABLE IF NOT EXISTS "memory_operations" (
+            "id" uuid PRIMARY KEY
+          )
+        `);
+        await sql.unsafe(`
+          ALTER TABLE "memory_extraction_jobs"
+          ADD COLUMN IF NOT EXISTS "provider_key" text
+        `);
+        await sql.unsafe(`
+          ALTER TABLE "memory_extraction_jobs"
+          ALTER COLUMN "provider_key" SET NOT NULL
+        `);
+        await sql.unsafe(`
+          ALTER TABLE "memory_extraction_jobs"
+          ADD COLUMN IF NOT EXISTS "operation_id" uuid
+        `);
+        await sql.unsafe(`
+          DO $$ BEGIN
+            IF NOT EXISTS (
+              SELECT 1 FROM pg_constraint
+              WHERE conname = 'memory_extraction_jobs_binding_id_memory_bindings_id_fk'
+                AND conrelid = 'memory_extraction_jobs'::regclass
+            ) THEN
+              ALTER TABLE "memory_extraction_jobs"
+              ADD CONSTRAINT "memory_extraction_jobs_binding_id_memory_bindings_id_fk"
+              FOREIGN KEY ("binding_id") REFERENCES "memory_bindings"("id") ON DELETE CASCADE;
+            END IF;
+          END $$;
+        `);
+        await sql.unsafe(`
+          DO $$ BEGIN
+            IF NOT EXISTS (
+              SELECT 1 FROM pg_constraint
+              WHERE conname = 'memory_extraction_jobs_operation_id_memory_operations_id_fk'
+                AND conrelid = 'memory_extraction_jobs'::regclass
+            ) THEN
+              ALTER TABLE "memory_extraction_jobs"
+              ADD CONSTRAINT "memory_extraction_jobs_operation_id_memory_operations_id_fk"
+              FOREIGN KEY ("operation_id") REFERENCES "memory_operations"("id") ON DELETE SET NULL;
+            END IF;
+          END $$;
+        `);
+        await sql.unsafe(
+          `DELETE FROM "drizzle"."__drizzle_migrations" WHERE hash = '${memoryJobCompatHash}'`,
+        );
+      } finally {
+        await sql.end();
+      }
+
+      const pendingState = await inspectMigrations(connectionString);
+      expect(pendingState).toMatchObject({
+        status: "needsMigrations",
+        pendingMigrations: ["0064_memory_job_legacy_compat.sql"],
+        reason: "pending-migrations",
+      });
+
+      await applyPendingMigrations(connectionString);
+
+      const finalState = await inspectMigrations(connectionString);
+      expect(finalState.status).toBe("upToDate");
+
+      const verifySql = postgres(connectionString, { max: 1, onnotice: () => {} });
+      try {
+        const columns = await verifySql.unsafe<{ column_name: string; is_nullable: string }[]>(`
+          SELECT column_name, is_nullable
+          FROM information_schema.columns
+          WHERE table_schema = 'public'
+            AND table_name = 'memory_extraction_jobs'
+            AND column_name = 'provider_key'
+        `);
+        expect(columns).toEqual([
+          expect.objectContaining({
+            column_name: "provider_key",
+            is_nullable: "YES",
+          }),
+        ]);
+
+        const constraints = await verifySql.unsafe<{ conname: string }[]>(`
+          SELECT conname
+          FROM pg_constraint
+          WHERE conrelid = 'memory_extraction_jobs'::regclass
+            AND conname IN (
+              'memory_extraction_jobs_binding_id_memory_bindings_id_fk',
+              'memory_extraction_jobs_operation_id_memory_operations_id_fk'
+            )
+          ORDER BY conname
+        `);
+        expect(constraints).toEqual([]);
+
+        await verifySql.unsafe(`
+          INSERT INTO "companies" (
+            "id",
+            "name",
+            "issue_prefix",
+            "require_board_approval_for_new_agents",
+            "feedback_data_sharing_enabled"
+          ) VALUES (
+            '00000000-0000-4000-8000-000000000641',
+            'Paperclip',
+            'T0064',
+            false,
+            false
+          )
+        `);
+        await verifySql.unsafe(`
+          INSERT INTO "memory_extraction_jobs" (
+            "id",
+            "company_id",
+            "binding_id",
+            "binding_key",
+            "operation_type",
+            "source_kind"
+          ) VALUES (
+            '00000000-0000-4000-8000-000000000642',
+            '00000000-0000-4000-8000-000000000641',
+            '00000000-0000-4000-8000-000000000643',
+            'primary',
+            'capture',
+            'manual'
+          )
+        `);
+
+        const inserted = await verifySql.unsafe<{ provider_key: string | null }[]>(`
+          SELECT provider_key
+          FROM "memory_extraction_jobs"
+          WHERE id = '00000000-0000-4000-8000-000000000642'
+        `);
+        expect(inserted).toEqual([{ provider_key: null }]);
+      } finally {
+        await verifySql.end();
+      }
+    },
+    20_000,
+  );
 });
