@@ -11,7 +11,13 @@ import { issuesApi } from "../api/issues";
 import { queryKeys } from "../lib/queryKeys";
 import { parseIssueReferenceFromHref, remarkLinkIssueReferences } from "../lib/issue-reference";
 import { remarkSoftBreaks } from "../lib/remark-soft-breaks";
+import {
+  parseWorkspaceFileHref,
+  remarkWorkspaceFileRefs,
+  WORKSPACE_FILE_HREF_PREFIX,
+} from "../lib/remark-workspace-file-refs";
 import { StatusIcon } from "./StatusIcon";
+import { WorkspaceFileLink } from "./WorkspaceFileLink";
 
 interface MarkdownBodyProps {
   children: string;
@@ -19,6 +25,12 @@ interface MarkdownBodyProps {
   style?: React.CSSProperties;
   softBreaks?: boolean;
   linkIssueReferences?: boolean;
+  /**
+   * When true, auto-link workspace file references inside inline code spans
+   * (e.g. `ui/src/pages/IssueDetail.tsx:42`). Requires a FileViewerProvider
+   * ancestor so that clicking a link opens the viewer.
+   */
+  linkWorkspaceFileReferences?: boolean;
   /** Optional resolver for relative image paths (e.g. within export packages) */
   resolveImageSrc?: (src: string) => string | null;
   /** Called when a user clicks an inline image */
@@ -108,6 +120,7 @@ function extractMermaidSource(children: ReactNode): string | null {
 }
 
 function safeMarkdownUrlTransform(url: string): string {
+  if (url.startsWith(WORKSPACE_FILE_HREF_PREFIX)) return url;
   return parseMentionChipHref(url) ? url : defaultUrlTransform(url);
 }
 
@@ -194,6 +207,7 @@ export function MarkdownBody({
   style,
   softBreaks = true,
   linkIssueReferences = true,
+  linkWorkspaceFileReferences = false,
   resolveImageSrc,
   onImageClick,
 }: MarkdownBodyProps) {
@@ -201,6 +215,9 @@ export function MarkdownBody({
   const remarkPlugins: NonNullable<Options["remarkPlugins"]> = [remarkGfm];
   if (linkIssueReferences) {
     remarkPlugins.push(remarkLinkIssueReferences);
+  }
+  if (linkWorkspaceFileReferences) {
+    remarkPlugins.push(remarkWorkspaceFileRefs);
   }
   if (softBreaks) {
     remarkPlugins.push(remarkSoftBreaks);
@@ -244,6 +261,13 @@ export function MarkdownBody({
       </code>
     ),
     a: ({ href, style: linkStyle, children: linkChildren }) => {
+      if (linkWorkspaceFileReferences) {
+        const workspaceFileRef = parseWorkspaceFileHref(href);
+        if (workspaceFileRef) {
+          return <WorkspaceFileLink workspaceFileRef={workspaceFileRef} />;
+        }
+      }
+
       const issueRef = linkIssueReferences ? parseIssueReferenceFromHref(href) : null;
       if (issueRef) {
         return (

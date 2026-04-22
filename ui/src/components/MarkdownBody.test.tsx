@@ -357,4 +357,23 @@ describe("MarkdownBody", () => {
     expect(html).toContain("paperclip-markdown-issue-ref");
     expect(html).not.toContain("paperclip-mention-chip--issue");
   });
+
+  it("renders workspace file refs in inline code as workspace file links when enabled", () => {
+    const html = renderToStaticMarkup(
+      <QueryClientProvider client={new QueryClient()}>
+        <ThemeProvider>
+          <MarkdownBody linkWorkspaceFileReferences>
+            {"Check `ui/src/pages/IssueDetail.tsx:42` please."}
+          </MarkdownBody>
+        </ThemeProvider>
+      </QueryClientProvider>,
+    );
+    expect(html).toContain('data-workspace-file-link="true"');
+    expect(html).toContain("ui/src/pages/IssueDetail.tsx:42");
+  });
+
+  it("does not create workspace file links when the flag is off", () => {
+    const html = renderMarkdown("See `ui/src/pages/IssueDetail.tsx:42` for details.");
+    expect(html).not.toContain("data-workspace-file-link");
+  });
 });
