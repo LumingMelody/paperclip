@@ -1469,13 +1469,15 @@ function AgentOverview({
       {/* Run activity — single merged chart. Issues-by-Priority and Issues-by-Status are reachable via the /issues filter views. */}
       <ChartCard title="Run Activity" subtitle={runActivitySubtitle}>
         <RunActivityChart runs={runs} richTooltips />
-        <ChartLegend
-          items={[
-            { color: "#10b981", label: "Succeeded" },
-            { color: "#ef4444", label: "Failed" },
-            { color: "#737373", label: "Other" },
-          ]}
-        />
+        {runs.length > 0 && (
+          <ChartLegend
+            items={[
+              { color: "#10b981", label: "Succeeded" },
+              { color: "#ef4444", label: "Failed" },
+              { color: "#737373", label: "Other" },
+            ]}
+          />
+        )}
       </ChartCard>
 
       {/* In-flight tasks — filter: status ∈ {todo, in_progress, blocked}; sort: priority DESC, updatedAt DESC; limit 7 */}
