@@ -63,7 +63,7 @@ vi.mock("@mdxeditor/editor", async () => {
     }), []);
 
     React.useEffect(() => {
-      if (!suppressHtmlProcessing && markdown.includes("<img ")) {
+      if (!suppressHtmlProcessing && (markdown.includes("<img ") || markdown.includes("<gpt>"))) {
         setContent("");
         onError?.({
           error: "Error parsing markdown: HTML-like formatting requires suppressHtmlProcessing",
@@ -251,9 +251,33 @@ describe("MarkdownEditor", () => {
     await flush();
     expect(mdxEditorMockState.markdownValues.at(-1)).toContain("![image](https://example.com/test.png)");
     expect(mdxEditorMockState.markdownValues.at(-1)).not.toContain("<img");
-    expect(mdxEditorMockState.suppressHtmlProcessingValues).toContain(false);
+    expect(mdxEditorMockState.suppressHtmlProcessingValues).toContain(true);
     expect(container.textContent).toContain("Before");
     expect(container.textContent).toContain("After");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("keeps LLM wrapper tags in the rich editor instead of falling back to raw source", async () => {
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        <MarkdownEditor
+          value={"<gpt>\n## My take\n\nBenchmark notes\n</gpt>"}
+          onChange={() => {}}
+          placeholder="Markdown body"
+        />,
+      );
+    });
+
+    await flush();
+    expect(mdxEditorMockState.suppressHtmlProcessingValues).toContain(true);
+    expect(container.querySelector("textarea")).toBeNull();
+    expect(container.textContent).toContain("Benchmark notes");
+    expect(container.textContent).not.toContain("Rich editor unavailable for this markdown");
 
     await act(async () => {
       root.unmount();

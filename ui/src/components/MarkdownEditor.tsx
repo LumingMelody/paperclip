@@ -1082,6 +1082,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
       <MDXEditor
         ref={setEditorRef}
         markdown={editorValue}
+        suppressHtmlProcessing
         placeholder={placeholder}
         readOnly={readOnly}
         onChange={(next) => {
