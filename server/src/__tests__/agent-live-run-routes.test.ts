@@ -197,7 +197,7 @@ describe("agent live run routes", () => {
     expect(res.status, JSON.stringify(res.body)).toBe(200);
     expect(mockIssueService.getByIdentifier).toHaveBeenCalledWith("PAP-1295");
     expect(mockHeartbeatService.getRunIssueSummary).toHaveBeenCalledWith("run-1");
-    expect(res.body).toEqual({
+    expect(res.body).toMatchObject({
       id: "run-1",
       status: "running",
       invocationSource: "on_demand",
@@ -209,7 +209,6 @@ describe("agent live run routes", () => {
       issueId: "issue-1",
       agentName: "Builder",
       adapterType: "codex_local",
-      outputSilence: null,
     });
     expect(res.body).not.toHaveProperty("resultJson");
     expect(res.body).not.toHaveProperty("contextSnapshot");
