@@ -30,6 +30,8 @@ export { projectGoals } from "./project_goals.js";
 export { goals } from "./goals.js";
 export { issues } from "./issues.js";
 export { issueReferenceMentions } from "./issue_reference_mentions.js";
+export { externalObjects } from "./external_objects.js";
+export { externalObjectMentions } from "./external_object_mentions.js";
 export { issueRelations } from "./issue_relations.js";
 export { routines, routineTriggers, routineRuns } from "./routines.js";
 export { issueWorkProducts } from "./issue_work_products.js";

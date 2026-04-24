@@ -50,6 +50,21 @@ export {
   type UpsertSidebarOrderPreference,
 } from "./sidebar-preferences.js";
 export {
+  externalObjectStatusCategorySchema,
+  externalObjectStatusToneSchema,
+  externalObjectLivenessStateSchema,
+  externalObjectMentionSourceKindSchema,
+  externalObjectMentionConfidenceSchema,
+  externalObjectProviderKeySchema,
+  externalObjectTypeSchema,
+  externalObjectCanonicalIdentitySchema,
+  externalObjectMentionSourceSchema,
+  type ExternalObjectCanonicalIdentityInput,
+  type ExternalObjectMentionSourceInput,
+  type ExternalObjectProviderKeyInput,
+  type ExternalObjectTypeInput,
+} from "./external-object.js";
+export {
   companySkillSourceTypeSchema,
   companySkillTrustLevelSchema,
   companySkillCompatibilitySchema,

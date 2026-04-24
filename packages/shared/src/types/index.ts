@@ -116,6 +116,10 @@ export type {
   IssueWorkProductReviewState,
 } from "./work-product.js";
 export type {
+  ExternalObject,
+  ExternalObjectMention,
+} from "./external-object.js";
+export type {
   Issue,
   IssueAssigneeAdapterOverrides,
   IssueBlockerAttention,
