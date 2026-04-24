@@ -1,10 +1,31 @@
-// @vitest-environment node
+// @vitest-environment jsdom
 
+import { act, type ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
+import { createRoot, type Root } from "react-dom/client";
 import type { TranscriptEntry } from "../../adapters";
 import { ThemeProvider } from "../../context/ThemeContext";
 import { RunTranscriptView, normalizeTranscript } from "./RunTranscriptView";
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
+
+function render(ui: ReactNode) {
+  const container = document.createElement("div");
+  document.body.appendChild(container);
+  const root: Root = createRoot(container);
+  act(() => {
+    root.render(ui);
+  });
+  return {
+    container,
+    unmount: () => {
+      act(() => root.unmount());
+      container.remove();
+    },
+  };
+}
 
 describe("RunTranscriptView", () => {
   it("keeps running command stdout inside the command fold instead of a standalone stdout block", () => {
@@ -111,29 +132,36 @@ describe("RunTranscriptView", () => {
     expect(html).not.toContain("result");
   });
 
-  it("adds timestamp and age tooltip to raw mode labels", () => {
+  it("adds timestamp and age tooltip to raw mode labels lazily on hover", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-03-12T00:03:00.000Z"));
+    const { container, unmount } = render(
+      <ThemeProvider>
+        <RunTranscriptView
+          mode="raw"
+          entries={[
+            {
+              kind: "stdout",
+              ts: "2026-03-12T00:00:00.000Z",
+              text: "hello",
+            },
+          ]}
+        />
+      </ThemeProvider>,
+    );
     try {
-      const html = renderToStaticMarkup(
-        <ThemeProvider>
-          <RunTranscriptView
-            mode="raw"
-            entries={[
-              {
-                kind: "stdout",
-                ts: "2026-03-12T00:00:00.000Z",
-                text: "hello",
-              },
-            ]}
-          />
-        </ThemeProvider>,
-      );
+      const label = container.querySelector("span[data-timestamp]");
+      expect(label?.textContent).toBe("stdout");
+      expect(label?.getAttribute("title")).toBeNull();
 
-      expect(html).toContain("Timestamp:");
-      expect(html).toContain("Ago: 3m ago");
-      expect(html).toContain(">stdout</span>");
+      act(() => {
+        label?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+      });
+
+      expect(label?.getAttribute("title")).toContain("Timestamp:");
+      expect(label?.getAttribute("title")).toContain("Ago: 3m ago");
     } finally {
+      unmount();
       vi.useRealTimers();
     }
   });

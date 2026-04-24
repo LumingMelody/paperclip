@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type MouseEvent as ReactMouseEvent } from "react";
 import type { TranscriptEntry } from "../../adapters";
 import { MarkdownBody } from "../MarkdownBody";
 import { timeAgo } from "../../lib/timeAgo";
@@ -140,6 +140,13 @@ function truncate(value: string, max: number): string {
 function formatRawEntryTimestampTooltip(ts: string): string {
   if (Number.isNaN(new Date(ts).getTime())) return ts;
   return `Timestamp: ${formatDateTime(ts)}; Ago: ${timeAgo(ts)}`;
+}
+
+function handleRawTimestampLabelHover(event: ReactMouseEvent<HTMLSpanElement>) {
+  if (event.currentTarget.title) return;
+  const ts = event.currentTarget.dataset.timestamp;
+  if (!ts) return;
+  event.currentTarget.title = formatRawEntryTimestampTooltip(ts);
 }
 
 function humanizeLabel(value: string): string {
@@ -1373,7 +1380,8 @@ function RawTranscriptView({
         >
           <span
             className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground"
-            title={formatRawEntryTimestampTooltip(entry.ts)}
+            data-timestamp={entry.ts}
+            onMouseEnter={handleRawTimestampLabelHover}
           >
             {entry.kind}
           </span>
