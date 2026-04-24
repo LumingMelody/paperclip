@@ -2715,7 +2715,7 @@ export function IssueDetail() {
   const canApplyTreeControl =
     Boolean(treeControlPreview)
     && !treeControlPreviewLoading
-    && (treeControlMode !== "cancel" || (treeControlReason.trim().length > 0 && treeControlCancelConfirmed));
+    && (treeControlMode !== "cancel" || treeControlCancelConfirmed);
   const attachmentUploadButton = (
     <>
       <input
@@ -3461,7 +3461,7 @@ export function IssueDetail() {
 
             <div className="space-y-1.5">
               <label className="text-xs text-muted-foreground">
-                {treeControlMode === "cancel" ? "Reason (required)" : "Reason (optional)"}
+                Reason (optional)
               </label>
               <Textarea
                 value={treeControlReason}
