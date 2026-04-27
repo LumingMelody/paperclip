@@ -22,7 +22,7 @@ export function shouldRenderRichSubIssuesSection(childIssuesLoading: boolean, ch
 }
 
 export function shouldRenderSubIssueProgressSummary(enabled: boolean | undefined, childIssueCount: number): boolean {
-  return enabled === true && childIssueCount > 0;
+  return enabled === true && childIssueCount > 1;
 }
 
 export function buildSubIssueProgressSummary(issues: Issue[]): SubIssueProgressSummary {
