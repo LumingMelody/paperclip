@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { resolveBootstrapCompanySelection } from "./CompanyContext";
+import { resolveBootstrapCompanySelection, shouldClearStoredCompanySelection } from "./CompanyContext";
 
 const activeCompany = { id: "company-1" };
+const secondActiveCompany = { id: "company-2" };
 const archivedCompany = { id: "archived-company" };
 
 describe("resolveBootstrapCompanySelection", () => {
@@ -32,6 +33,15 @@ describe("resolveBootstrapCompanySelection", () => {
     })).toBe("company-1");
   });
 
+  it("keeps a valid stored company id instead of falling back to the first company", () => {
+    expect(resolveBootstrapCompanySelection({
+      companies: [activeCompany, secondActiveCompany],
+      sidebarCompanies: [activeCompany, secondActiveCompany],
+      selectedCompanyId: null,
+      storedCompanyId: "company-2",
+    })).toBe("company-2");
+  });
+
   it("uses selectable sidebar companies before archived companies", () => {
     expect(resolveBootstrapCompanySelection({
       companies: [archivedCompany, activeCompany],
@@ -39,5 +49,23 @@ describe("resolveBootstrapCompanySelection", () => {
       selectedCompanyId: null,
       storedCompanyId: "archived-company",
     })).toBe("company-1");
+  });
+});
+
+describe("shouldClearStoredCompanySelection", () => {
+  it("does not clear the stored company selection during an unauthorized company list response", () => {
+    expect(shouldClearStoredCompanySelection({
+      companies: [],
+      isLoading: false,
+      unauthorized: true,
+    })).toBe(false);
+  });
+
+  it("clears the stored company selection when an authorized company list is empty", () => {
+    expect(shouldClearStoredCompanySelection({
+      companies: [],
+      isLoading: false,
+      unauthorized: false,
+    })).toBe(true);
   });
 });

@@ -14,6 +14,7 @@ import { ApiError } from "../api/client";
 import { queryKeys } from "../lib/queryKeys";
 import type { CompanySelectionSource } from "../lib/company-selection";
 type CompanySelectionOptions = { source?: CompanySelectionSource };
+type CompanyListResult = { companies: Company[]; unauthorized: boolean };
 
 interface CompanyContextValue {
   companies: Company[];
@@ -55,25 +56,35 @@ export function resolveBootstrapCompanySelection(input: {
   return selectableCompanies[0]?.id ?? null;
 }
 
+export function shouldClearStoredCompanySelection(input: {
+  companies: Array<Pick<Company, "id">>;
+  isLoading: boolean;
+  unauthorized: boolean;
+}) {
+  return !input.isLoading && !input.unauthorized && input.companies.length === 0;
+}
+
 export function CompanyProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const [selectionSource, setSelectionSource] = useState<CompanySelectionSource>("bootstrap");
   const [selectedCompanyId, setSelectedCompanyIdState] = useState<string | null>(null);
 
-  const { data: companies = [], isLoading, error } = useQuery({
+  const { data: companiesResult = { companies: [], unauthorized: false }, isLoading, error } = useQuery<CompanyListResult>({
     queryKey: queryKeys.companies.all,
     queryFn: async () => {
       try {
-        return await companiesApi.list();
+        return { companies: await companiesApi.list(), unauthorized: false };
       } catch (err) {
         if (err instanceof ApiError && err.status === 401) {
-          return [];
+          return { companies: [], unauthorized: true };
         }
         throw err;
       }
     },
     retry: false,
   });
+  const companies = companiesResult.companies;
+  const companyListUnauthorized = companiesResult.unauthorized;
   const sidebarCompanies = useMemo(
     () => companies.filter((company) => company.status !== "archived"),
     [companies],
@@ -83,10 +94,12 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (isLoading) return;
     if (companies.length === 0) {
-      if (selectedCompanyId !== null) {
-        setSelectedCompanyIdState(null);
+      if (shouldClearStoredCompanySelection({ companies, isLoading, unauthorized: companyListUnauthorized })) {
+        if (selectedCompanyId !== null) {
+          setSelectedCompanyIdState(null);
+        }
+        localStorage.removeItem(STORAGE_KEY);
       }
-      localStorage.removeItem(STORAGE_KEY);
       return;
     }
 
@@ -100,7 +113,7 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
     setSelectedCompanyIdState(next);
     setSelectionSource("bootstrap");
     localStorage.setItem(STORAGE_KEY, next);
-  }, [companies, isLoading, selectedCompanyId, sidebarCompanies]);
+  }, [companies, companyListUnauthorized, isLoading, selectedCompanyId, sidebarCompanies]);
 
   const setSelectedCompanyId = useCallback((companyId: string, options?: CompanySelectionOptions) => {
     setSelectedCompanyIdState(companyId);
