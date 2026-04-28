@@ -579,7 +579,7 @@ export function productivityReviewService(db: Db, deps?: { enqueueWakeup?: Enque
         originKind: PRODUCTIVITY_REVIEW_ORIGIN_KIND,
         originId: evidence.sourceIssue.id,
         originFingerprint: productivityReviewFingerprint(evidence.sourceIssue.id),
-        requestDepth: clampIssueRequestDepth(clampIssueRequestDepth(evidence.sourceIssue.requestDepth) + 1),
+        requestDepth: clampIssueRequestDepth(evidence.sourceIssue.requestDepth + 1),
       });
     } catch (error) {
       const maybe = error as { code?: string; constraint?: string; message?: string };
