@@ -48,6 +48,7 @@ vi.mock("../context/CompanyContext", () => ({
 
 vi.mock("../context/DialogContext", () => ({
   useDialog: () => dialogState,
+  useDialogActions: () => dialogState,
 }));
 
 vi.mock("@/lib/router", () => ({
