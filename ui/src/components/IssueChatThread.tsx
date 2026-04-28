@@ -2148,6 +2148,14 @@ function findMessageAnchorIndex(messages: readonly ThreadMessage[], anchorId: st
   return messages.findIndex((message) => issueChatMessageAnchorId(message) === anchorId);
 }
 
+export function findLatestCommentMessageIndex(messages: readonly ThreadMessage[]): number {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const anchorId = issueChatMessageAnchorId(messages[index]);
+    if (anchorId && anchorId.startsWith("comment-")) return index;
+  }
+  return -1;
+}
+
 type VirtualizedVisibleAnchorSnapshot = {
   anchorId: string;
   index: number;
@@ -3227,6 +3235,19 @@ export function IssueChatThread({
   }, [location.hash, messageAnchorIndex, messages, useVirtualizedThread]);
 
   function handleJumpToLatest() {
+    // Prefer the latest comment row over whichever run/timeline row happens to
+    // sort last in the merged feed. Fall back to the trailing row when no
+    // comment row exists (run-only/embedded outputs).
+    const latestCommentIndex = findLatestCommentMessageIndex(messages);
+    if (latestCommentIndex >= 0) {
+      const latestCommentAnchor = issueChatMessageAnchorId(messages[latestCommentIndex]);
+      if (
+        latestCommentAnchor
+        && scrollToThreadAnchor(latestCommentAnchor, { align: "end", behavior: "smooth" })
+      ) {
+        return;
+      }
+    }
     if (useVirtualizedThread) {
       virtualizedThreadRef.current?.scrollToLatest({ behavior: "smooth" });
       return;
