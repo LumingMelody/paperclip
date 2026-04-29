@@ -157,6 +157,7 @@ export async function createApp(
   api.use(projectRoutes(db));
   api.use(issueRoutes(db, opts.storageService, {
     feedbackExportService: opts.feedbackExportService,
+    serverPort: opts.serverPort,
   }));
   api.use(routineRoutes(db));
   api.use(executionWorkspaceRoutes(db));

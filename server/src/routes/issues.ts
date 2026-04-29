@@ -1,4 +1,7 @@
+import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
 import { Router, type Request, type Response } from "express";
 import multer from "multer";
 import { z } from "zod";
@@ -61,12 +64,36 @@ import {
   normalizeIssueExecutionPolicy,
   parseIssueExecutionState,
 } from "../services/issue-execution-policy.js";
+import { resolveManagedProjectWorkspaceDir } from "../home-paths.js";
 
 const MAX_ISSUE_COMMENT_LIMIT = 500;
+const ISSUE_CLOSE_VERIFIER_TIMEOUT_MS = 30_000;
+const ISSUE_CLOSE_VERIFIER_FAIL_OUTPUT_CHARS = 3 * 1024;
+const ISSUE_CLOSE_VERIFIER_RESPONSE_EXCERPT_CHARS = 1024;
 const updateIssueRouteSchema = updateIssueSchema.extend({
   interrupt: z.boolean().optional(),
 });
 
+type IssueCloseVerifierStatus = "PASS" | "WARN" | "FAIL";
+type IssueCloseVerifierCheck = {
+  name: string;
+  status: IssueCloseVerifierStatus;
+  detail: string;
+};
+type IssueCloseVerifierResult = {
+  status: IssueCloseVerifierStatus;
+  stdout: string;
+  stderr: string;
+  outputBytes: number;
+  checks: IssueCloseVerifierCheck[] | null;
+};
+type IssueCloseVerifierIssue = {
+  id: string;
+  companyId: string;
+  projectId?: string | null;
+  identifier?: string | null;
+  executionPolicy?: unknown;
+};
 type ParsedExecutionState = NonNullable<ReturnType<typeof parseIssueExecutionState>>;
 type NormalizedExecutionPolicy = NonNullable<ReturnType<typeof normalizeIssueExecutionPolicy>>;
 type ActivityIssueRelationSummary = {
@@ -88,6 +115,185 @@ type ExecutionStageWakeContext = {
   allowedActions: string[];
 };
 
+function isIssueCloseVerifierStatus(value: unknown): value is IssueCloseVerifierStatus {
+  return value === "PASS" || value === "WARN" || value === "FAIL";
+}
+
+function isIssueCloseVerifierTriggerStatus(value: unknown): value is "done" | "in_review" {
+  return value === "done" || value === "in_review";
+}
+
+function issueExecutionPolicySkipsVerify(executionPolicy: unknown): boolean {
+  if (!executionPolicy || typeof executionPolicy !== "object" || Array.isArray(executionPolicy)) return false;
+  return (executionPolicy as { skipVerify?: unknown }).skipVerify === true;
+}
+
+function resolveServerPortForVerifier(port: number | undefined): number {
+  if (typeof port === "number" && Number.isFinite(port) && port > 0) return port;
+  const envPort = Number.parseInt(process.env.PORT ?? "", 10);
+  return Number.isFinite(envPort) && envPort > 0 ? envPort : 3100;
+}
+
+function resolveTsxBin(): string {
+  const binName = process.platform === "win32" ? "tsx.cmd" : "tsx";
+  const candidates = [
+    path.resolve(process.cwd(), "node_modules", ".bin", binName),
+    path.resolve(process.cwd(), "..", "node_modules", ".bin", binName),
+  ];
+  return candidates.find((candidate) => fs.existsSync(candidate)) ?? "tsx";
+}
+
+function truncateHead(value: string, maxChars: number): string {
+  return value.length > maxChars ? value.slice(0, maxChars) : value;
+}
+
+function truncateTail(value: string, maxChars: number): string {
+  return value.length > maxChars ? value.slice(value.length - maxChars) : value;
+}
+
+function parseVerifierStatus(stdout: string): IssueCloseVerifierStatus | null {
+  const match = stdout.match(/Overall:\s*(PASS|WARN|FAIL)\b/);
+  const value = match?.[1];
+  return isIssueCloseVerifierStatus(value) ? value : null;
+}
+
+function parseVerifierChecks(stdout: string): IssueCloseVerifierCheck[] | null {
+  const checks: IssueCloseVerifierCheck[] = [];
+  const checkLine = /^\s*[✓⚠✗]\s+\[(PASS|WARN|FAIL)\]\s+([^:]+):\s*(.*)$/gm;
+  let match: RegExpExecArray | null;
+  while ((match = checkLine.exec(stdout)) !== null) {
+    const status = match[1];
+    if (!isIssueCloseVerifierStatus(status)) continue;
+    checks.push({
+      status,
+      name: match[2]?.trim() ?? "",
+      detail: match[3]?.trim() ?? "",
+    });
+  }
+  return checks.length > 0 ? checks : null;
+}
+
+function runVerifierProcess(input: {
+  verifierPath: string;
+  issueIdentifier: string;
+  serverPort: number;
+}): Promise<{ stdout: string; stderr: string; timedOut: boolean; spawnError: string | null }> {
+  return new Promise((resolve) => {
+    const child = spawn(resolveTsxBin(), [input.verifierPath, "--issue-id", input.issueIdentifier], {
+      cwd: path.dirname(input.verifierPath),
+      env: {
+        ...process.env,
+        PAPERCLIP_API_URL: `http://127.0.0.1:${input.serverPort}`,
+      },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    let timedOut = false;
+    let settled = false;
+    let timeout: ReturnType<typeof setTimeout>;
+    const finish = (spawnError: string | null) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      resolve({ stdout, stderr, timedOut, spawnError });
+    };
+    timeout = setTimeout(() => {
+      timedOut = true;
+      child.kill("SIGTERM");
+      finish(null);
+    }, ISSUE_CLOSE_VERIFIER_TIMEOUT_MS);
+
+    child.stdout?.setEncoding("utf8");
+    child.stderr?.setEncoding("utf8");
+    child.stdout?.on("data", (chunk: string) => {
+      stdout += chunk;
+    });
+    child.stderr?.on("data", (chunk: string) => {
+      stderr += chunk;
+    });
+    child.on("error", (err) => {
+      finish(err instanceof Error ? err.message : String(err));
+    });
+    child.on("close", () => {
+      finish(null);
+    });
+  });
+}
+
+async function runIssueCloseVerifier(input: {
+  issue: IssueCloseVerifierIssue;
+  projectsSvc: ReturnType<typeof projectService>;
+  serverPort: number;
+}): Promise<IssueCloseVerifierResult | null> {
+  if (!input.issue.projectId) {
+    logger.info({ issueId: input.issue.id, companyId: input.issue.companyId }, "verifier not available");
+    return null;
+  }
+
+  const project = await input.projectsSvc.getById(input.issue.projectId);
+  if (!project || project.companyId !== input.issue.companyId) {
+    logger.info(
+      { issueId: input.issue.id, companyId: input.issue.companyId, projectId: input.issue.projectId },
+      "verifier not available",
+    );
+    return null;
+  }
+
+  const verifierPath = path.join(
+    resolveManagedProjectWorkspaceDir({
+      companyId: input.issue.companyId,
+      projectId: input.issue.projectId,
+    }),
+    "scripts",
+    "eval",
+    "verifier.ts",
+  );
+  if (!fs.existsSync(verifierPath)) {
+    logger.info(
+      { issueId: input.issue.id, companyId: input.issue.companyId, projectId: input.issue.projectId, verifierPath },
+      "verifier not available",
+    );
+    return null;
+  }
+
+  const run = await runVerifierProcess({
+    verifierPath,
+    issueIdentifier: input.issue.identifier ?? input.issue.id,
+    serverPort: input.serverPort,
+  });
+  if (run.timedOut || run.spawnError) {
+    logger.warn(
+      {
+        issueId: input.issue.id,
+        verifierPath,
+        timedOut: run.timedOut,
+        spawnError: run.spawnError,
+      },
+      "issue close verifier did not complete cleanly",
+    );
+  }
+
+  const parsedStatus = parseVerifierStatus(run.stdout);
+  if (!parsedStatus) {
+    logger.warn(
+      { issueId: input.issue.id, verifierPath, stdoutBytes: Buffer.byteLength(run.stdout, "utf8") },
+      "failed to parse issue close verifier status",
+    );
+  }
+
+  return {
+    status: parsedStatus ?? "WARN",
+    stdout: run.stdout,
+    stderr: run.stderr,
+    outputBytes: Buffer.byteLength(run.stdout + run.stderr, "utf8"),
+    checks: parseVerifierChecks(run.stdout),
+  };
+}
+
+// Manual verifier check: PATCH a project issue with a failing
+// _default/scripts/eval/verifier.ts to status=done and expect 422; set
+// executionPolicy.skipVerify=true on the issue and expect 200 with status persisted.
 function executionPrincipalsEqual(
   left: ParsedExecutionState["currentParticipant"] | null,
   right: ParsedExecutionState["currentParticipant"] | null,
@@ -274,6 +480,7 @@ export function issueRoutes(
         now?: Date;
       }): Promise<unknown>;
     };
+    serverPort?: number;
   },
 ) {
   const router = Router();
@@ -1313,6 +1520,7 @@ export function issueRoutes(
     if (!(await assertAgentRunCheckoutOwnership(req, res, existing))) return;
 
     const actor = getActorInfo(req);
+    const requestedVerifierCloseStatus = isIssueCloseVerifierTriggerStatus(req.body.status) ? req.body.status : null;
     const isClosed = existing.status === "done" || existing.status === "cancelled";
     const existingRelations =
       Array.isArray(req.body.blockedByIssueIds)
@@ -1426,6 +1634,43 @@ export function issueRoutes(
     if (assigneeWillChange && !transition.workflowControlledAssignment) {
       if (!isAgentReturningIssueToCreator) {
         await assertCanAssignTasks(req, existing.companyId);
+      }
+    }
+
+    let verifierResult: IssueCloseVerifierResult | null = null;
+    if (
+      requestedVerifierCloseStatus &&
+      existing.status !== "done" &&
+      existing.status !== "in_review" &&
+      !issueExecutionPolicySkipsVerify(existing.executionPolicy)
+    ) {
+      verifierResult = await runIssueCloseVerifier({
+        issue: existing,
+        projectsSvc,
+        serverPort: resolveServerPortForVerifier(opts?.serverPort),
+      });
+      if (verifierResult?.status === "FAIL") {
+        await logActivity(db, {
+          companyId: existing.companyId,
+          actorType: actor.actorType,
+          actorId: actor.actorId,
+          agentId: actor.agentId,
+          runId: actor.runId,
+          action: "issue.close_blocked_by_verifier",
+          entityType: "issue",
+          entityId: existing.id,
+          details: {
+            verifierStatus: "FAIL",
+            outputBytes: verifierResult.outputBytes,
+            requestedStatus: requestedVerifierCloseStatus,
+          },
+        });
+        res.status(422).json({
+          error: "verifier_failed",
+          verifyOutput: truncateTail(verifierResult.stdout, ISSUE_CLOSE_VERIFIER_FAIL_OUTPUT_CHARS),
+          checks: verifierResult.checks,
+        });
+        return;
       }
     }
 
@@ -1549,6 +1794,23 @@ export function issueRoutes(
         _previous: hasFieldChanges ? previous : undefined,
       },
     });
+
+    if (verifierResult) {
+      await logActivity(db, {
+        companyId: issue.companyId,
+        actorType: actor.actorType,
+        actorId: actor.actorId,
+        agentId: actor.agentId,
+        runId: actor.runId,
+        action: "issue.verified",
+        entityType: "issue",
+        entityId: issue.id,
+        details: {
+          verifierStatus: verifierResult.status,
+          outputBytes: verifierResult.outputBytes,
+        },
+      });
+    }
 
     if (Array.isArray(req.body.blockedByIssueIds)) {
       const previousBlockedByIds = new Set((existingRelations?.blockedBy ?? []).map((relation) => relation.id));
@@ -1865,7 +2127,18 @@ export function issueRoutes(
       }
     })();
 
-    res.json({ ...issueResponse, comment });
+    res.json({
+      ...issueResponse,
+      comment,
+      ...(verifierResult
+        ? {
+            verifyReport: {
+              status: verifierResult.status,
+              excerpt: truncateHead(verifierResult.stdout, ISSUE_CLOSE_VERIFIER_RESPONSE_EXCERPT_CHARS),
+            },
+          }
+        : {}),
+    });
   });
 
   router.delete("/issues/:id", async (req, res) => {
