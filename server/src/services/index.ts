@@ -17,6 +17,7 @@ export { routineService } from "./routines.js";
 export { costService } from "./costs.js";
 export { financeService } from "./finance.js";
 export { heartbeatService } from "./heartbeat.js";
+export { reconcileStaleAgents, startAgentStateReconciler } from "./agent-state-reconciler.js";
 export { dashboardService } from "./dashboard.js";
 export { sidebarBadgeService } from "./sidebar-badges.js";
 export { inboxDismissalService } from "./inbox-dismissals.js";

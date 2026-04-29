@@ -125,6 +125,7 @@ vi.mock("../services/index.js", () => ({
   routineService: vi.fn(() => ({
     tickScheduledTriggers: vi.fn(async () => ({ triggered: 0 })),
   })),
+  startAgentStateReconciler: vi.fn(() => ({ stop: vi.fn() })),
 }));
 
 vi.mock("../storage/index.js", () => ({
