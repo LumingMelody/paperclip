@@ -34,6 +34,7 @@ import {
   instanceSettingsService,
   reconcilePersistedRuntimeServicesOnStartup,
   routineService,
+  startAgentStateReconciler,
 } from "./services/index.js";
 import { createFeedbackTraceShareClientFromConfig } from "./services/feedback-share-client.js";
 import { buildRuntimeApiCandidateUrls, choosePrimaryRuntimeApiUrl } from "./runtime-api.js";
@@ -656,6 +657,11 @@ export async function startServer(): Promise<StartedServer> {
     resolveSessionFromHeaders,
   });
 
+  const agentStateReconciler = startAgentStateReconciler({
+    db,
+    intervalMs: 5 * 60_000,
+  });
+
   void reconcilePersistedRuntimeServicesOnStartup(db as any)
     .then((result) => {
       if (result.reconciled > 0) {
@@ -870,6 +876,8 @@ export async function startServer(): Promise<StartedServer> {
   
   {
     const shutdown = async (signal: "SIGINT" | "SIGTERM") => {
+      agentStateReconciler.stop();
+
       const telemetryClient = getTelemetryClient();
       if (telemetryClient) {
         telemetryClient.stop();
