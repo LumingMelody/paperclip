@@ -1,13 +1,12 @@
 #!/usr/bin/env node
-import { parseArgs } from "node:util";
+import { parseArgs, type ParseArgsConfig } from "node:util";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { assertContext, type ExecutionContext } from "./context.js";
 import { errorMessage, classifyError, ValidationError } from "./errors.js";
 import { hashArgs } from "./argsHash.js";
-import { factOrders } from "./tools/lingxing/factOrders.js";
-import { factSku } from "./tools/lingxing/factSku.js";
-import { search } from "./tools/meta/toolCallsSearch.js";
+import { runTool } from "./executor.js";
+import { findToolByCli, tools as registeredTools, type ToolDescriptor } from "./registry.js";
 
 interface CliWritable {
   write(chunk: string): unknown;
@@ -18,13 +17,7 @@ interface CliIo {
   stderr: CliWritable;
 }
 
-const helpText = `pcl-tools
-
-Subcommands:
-  lingxing fact-sku      --company <c> --project <p> --issue <i> --actor <agent|user|system> --asin <ASIN>
-  lingxing fact-orders   --company <c> --project <p> --issue <i> --actor <agent|user|system> --sku-id <SKU> --since <ISO>
-  tool-calls search      --company <c> --project <p> --issue <i> --actor <agent|user|system> --since <ISO> [--tool <name>] [--issue-filter <id>]
-`;
+type ParseArgsOptions = NonNullable<ParseArgsConfig["options"]>;
 
 function stringFlag(values: Record<string, unknown>, key: string): string | undefined {
   const value = values[key];
@@ -36,19 +29,7 @@ function parseCliArgs(argv: string[]) {
     return parseArgs({
       args: argv,
       allowPositionals: true,
-      options: {
-        help: { type: "boolean", short: "h" },
-        company: { type: "string" },
-        project: { type: "string" },
-        issue: { type: "string" },
-        actor: { type: "string" },
-        run: { type: "string" },
-        asin: { type: "string" },
-        "sku-id": { type: "string" },
-        since: { type: "string" },
-        tool: { type: "string" },
-        "issue-filter": { type: "string" },
-      },
+      options: buildCliOptions(registeredTools),
     });
   } catch (error) {
     throw new ValidationError(errorMessage(error));
@@ -71,37 +52,98 @@ function writeJson(stream: CliWritable, value: unknown): void {
   stream.write(`${JSON.stringify(value, null, 2)}\n`);
 }
 
+const contextFlags = new Set(["actor", "company", "help", "issue", "project", "run"]);
+const cliInputAliases: Record<string, string> = {
+  "issue-filter": "issue",
+};
+
+function cliSourceName(source: string): string {
+  return source.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`).toLowerCase();
+}
+
+function inputKeyToFlag(key: string): string {
+  if (key === "issue") return "issue-filter";
+  return key.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
+}
+
+function schemaKeys(desc: ToolDescriptor): string[] {
+  const schema = desc.inputSchema as unknown as {
+    shape?: Record<string, unknown>;
+    _def?: { shape?: Record<string, unknown> | (() => Record<string, unknown>) };
+  };
+  const shape = schema.shape ?? (typeof schema._def?.shape === "function" ? schema._def.shape() : schema._def?.shape);
+  return shape && typeof shape === "object" ? Object.keys(shape) : [];
+}
+
+function inputFlags(desc: ToolDescriptor): string[] {
+  return schemaKeys(desc).map(inputKeyToFlag);
+}
+
+function buildCliOptions(toolList: ToolDescriptor[]): ParseArgsOptions {
+  const options: ParseArgsOptions = {
+    help: { type: "boolean", short: "h" },
+    company: { type: "string" },
+    project: { type: "string" },
+    issue: { type: "string" },
+    actor: { type: "string" },
+    run: { type: "string" },
+  };
+  for (const desc of toolList) {
+    for (const flag of inputFlags(desc)) {
+      options[flag] = { type: "string" };
+    }
+  }
+  return options;
+}
+
+function buildHelpText(toolList: ToolDescriptor[]): string {
+  const lines = ["pcl-tools", "", "Subcommands:"];
+  for (const desc of toolList) {
+    const flags = inputFlags(desc).map((flag) => `--${flag} <value>`).join(" ");
+    lines.push(
+      `  ${cliSourceName(desc.source)} ${desc.cliSubcommand} --company <c> --project <p> --issue <i> --actor <agent|user|system>${
+        flags ? ` ${flags}` : ""
+      }`,
+    );
+  }
+  return `${lines.join("\n")}\n`;
+}
+
+function flagToInputKey(flag: string): string {
+  return cliInputAliases[flag] ?? flag.replace(/-([a-z])/g, (_match, letter: string) => letter.toUpperCase());
+}
+
+function buildRawInput(values: Record<string, unknown>): Record<string, string> {
+  const input: Record<string, string> = {};
+  for (const [key, value] of Object.entries(values)) {
+    if (contextFlags.has(key) || typeof value !== "string") continue;
+    input[flagToInputKey(key)] = value;
+  }
+  return input;
+}
+
+function parseToolInput(desc: ToolDescriptor, rawInput: unknown): unknown {
+  const parsed = desc.inputSchema.safeParse(rawInput);
+  if (!parsed.success) {
+    throw new ValidationError(`Invalid ${desc.id} input: ${parsed.error.issues[0]?.message ?? "invalid input"}`);
+  }
+  return parsed.data;
+}
+
 async function dispatch(positionals: string[], values: Record<string, unknown>): Promise<unknown> {
-  const [namespace, command] = positionals;
-
-  if (namespace === "lingxing" && command === "fact-sku") {
-    const input = {
-      asin: stringFlag(values, "asin"),
-    };
-    const ctx = buildContext(values, "lingxing.factSku", input);
-    return factSku(ctx, input);
+  const [source, subcommand] = positionals;
+  if (!source || !subcommand) {
+    throw new ValidationError(`Unknown subcommand: ${positionals.join(" ") || "(none)"}`);
   }
 
-  if (namespace === "lingxing" && command === "fact-orders") {
-    const input = {
-      skuId: stringFlag(values, "sku-id"),
-      since: stringFlag(values, "since"),
-    };
-    const ctx = buildContext(values, "lingxing.factOrders", input);
-    return factOrders(ctx, input);
+  const desc = findToolByCli(source, subcommand);
+  if (!desc) {
+    throw new ValidationError(`Unknown subcommand: ${positionals.join(" ") || "(none)"}`);
   }
 
-  if (namespace === "tool-calls" && command === "search") {
-    const input = {
-      since: stringFlag(values, "since"),
-      tool: stringFlag(values, "tool"),
-      issue: stringFlag(values, "issue-filter"),
-    };
-    const ctx = buildContext(values, "toolCalls.search", input);
-    return search(ctx, input);
-  }
-
-  throw new ValidationError(`Unknown subcommand: ${positionals.join(" ") || "(none)"}`);
+  const rawInput = buildRawInput(values);
+  const ctx = buildContext(values, desc.id, rawInput);
+  return runTool(ctx, async () => desc.handler(ctx, parseToolInput(desc, rawInput)));
 }
 
 export async function runCli(
@@ -112,7 +154,7 @@ export async function runCli(
     const parsed = parseCliArgs(argv);
     const values = parsed.values as Record<string, unknown>;
     if (values.help === true) {
-      io.stdout.write(helpText);
+      io.stdout.write(buildHelpText(registeredTools));
       return 0;
     }
 

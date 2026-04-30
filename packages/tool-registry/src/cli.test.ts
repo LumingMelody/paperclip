@@ -1,20 +1,57 @@
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { describe, expect, it, vi } from "vitest";
-import { factSku } from "./tools/lingxing/factSku.js";
+import { describe, expect, it, beforeEach, vi } from "vitest";
 
-vi.mock("./tools/lingxing/factSku.js", () => ({
-  factSku: vi.fn(async () => ({ asin: "B01N9G3JK7" })),
+const registryMock = vi.hoisted(() => ({
+  handler: vi.fn(async () => ({ asin: "B01N9G3JK7" })),
+  findToolByCli: vi.fn(),
 }));
 
-vi.mock("./tools/lingxing/factOrders.js", () => ({
-  factOrders: vi.fn(async () => []),
+vi.mock("./telemetry.js", () => ({
+  recordToolCall: vi.fn(async () => undefined),
 }));
 
-vi.mock("./tools/meta/toolCallsSearch.js", () => ({
-  search: vi.fn(async () => []),
-}));
+vi.mock("./registry.js", async () => {
+  const { z } = await import("zod");
+  const descriptor = {
+    id: "lingxing.factSku",
+    cliSubcommand: "fact-sku",
+    source: "lingxing",
+    description: "Read Lingxing SKU facts for an Amazon ASIN.",
+    readOnly: true as const,
+    inputSchema: z
+      .object({
+        asin: z.string().regex(/^[A-Z0-9]{10}$/),
+      })
+      .strict(),
+    handler: registryMock.handler,
+  };
+  const toolCallsDescriptor = {
+    id: "toolCalls.search",
+    cliSubcommand: "search",
+    source: "toolCalls",
+    description: "Search Paperclip tool-call telemetry for a project.",
+    readOnly: true as const,
+    inputSchema: z
+      .object({
+        since: z.string(),
+        tool: z.string().optional(),
+        issue: z.string().optional(),
+      })
+      .strict(),
+    handler: vi.fn(),
+  };
+  const tools = [descriptor, toolCallsDescriptor];
+  return {
+    tools,
+    registerTool: vi.fn(),
+    findToolById: vi.fn((id: string) => tools.find((tool) => tool.id === id)),
+    findToolByCli: registryMock.findToolByCli,
+  };
+});
 
+const registry = await import("./registry.js");
+const { recordToolCall } = await import("./telemetry.js");
 const { runCli } = await import("./cli.js");
 
 function makeIo() {
@@ -45,6 +82,13 @@ function makeIo() {
 }
 
 describe("runCli", () => {
+  beforeEach(() => {
+    vi.mocked(registry.findToolByCli).mockReset();
+    vi.mocked(registry.findToolByCli).mockReturnValue(registry.tools[0]);
+    registryMock.handler.mockClear();
+    vi.mocked(recordToolCall).mockClear();
+  });
+
   it("prints help without requiring execution context", async () => {
     const output = makeIo();
 
@@ -53,6 +97,7 @@ describe("runCli", () => {
     expect(output.stdout).toContain("lingxing fact-sku");
     expect(output.stdout).toContain("tool-calls search");
     expect(output.stderr).toBe("");
+    expect(registry.findToolByCli).not.toHaveBeenCalled();
   });
 
   it("returns structured JSON errors when context flags are missing", async () => {
@@ -65,9 +110,8 @@ describe("runCli", () => {
     });
   });
 
-  it("dispatches a valid lingxing fact-sku command with computed context", async () => {
+  it("dispatches a valid lingxing fact-sku command through the registry with computed context", async () => {
     const output = makeIo();
-    vi.mocked(factSku).mockClear();
 
     await expect(
       runCli(
@@ -89,7 +133,8 @@ describe("runCli", () => {
       ),
     ).resolves.toBe(0);
 
-    expect(factSku).toHaveBeenCalledWith(
+    expect(registry.findToolByCli).toHaveBeenCalledWith("lingxing", "fact-sku");
+    expect(registryMock.handler).toHaveBeenCalledWith(
       expect.objectContaining({
         companyId: "company-1",
         projectId: "project-1",
@@ -100,6 +145,7 @@ describe("runCli", () => {
       }),
       { asin: "B01N9G3JK7" },
     );
+    expect(recordToolCall).toHaveBeenCalledWith(expect.objectContaining({ status: "success" }));
     expect(JSON.parse(output.stdout) as unknown).toEqual({ asin: "B01N9G3JK7" });
   });
 

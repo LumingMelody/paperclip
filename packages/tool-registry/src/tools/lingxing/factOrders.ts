@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { ExecutionContext } from "../../context.js";
 import { UpstreamError, ValidationError } from "../../errors.js";
 import { runTool } from "../../executor.js";
+import type { ToolDescriptor } from "../../registry.js";
 import { queryLingxing } from "./client.js";
 
 function isIsoDate(value: string): boolean {
@@ -33,6 +34,7 @@ const factOrderRowSchema = z
 
 const factOrdersResponseSchema = z
   .object({
+    version: z.literal("1").optional(),
     rows: z.array(factOrderRowSchema),
   })
   .strict();
@@ -50,18 +52,31 @@ function parseFactOrdersInput(input: unknown): FactOrdersInput {
   return parsed.data;
 }
 
-export async function factOrders(ctx: ExecutionContext, input: unknown): Promise<FactOrderRow[]> {
-  return runTool(ctx, async () => {
-    const parsedInput = parseFactOrdersInput(input);
-    const response = await queryLingxing(ctx.companyId, {
-      op: "factOrders",
-      skuId: parsedInput.skuId,
-      since: parsedInput.since,
-    });
-    const parsedResponse = factOrdersResponseSchema.safeParse(response);
-    if (!parsedResponse.success) {
-      throw new UpstreamError("Lingxing factOrders returned an unexpected response shape");
-    }
-    return parsedResponse.data.rows;
+async function handleFactOrders(ctx: ExecutionContext, input: FactOrdersInput): Promise<FactOrderRow[]> {
+  const response = await queryLingxing(ctx.companyId, {
+    op: "factOrders",
+    skuId: input.skuId,
+    since: input.since,
   });
+  const parsedResponse = factOrdersResponseSchema.safeParse(response);
+  if (!parsedResponse.success) {
+    throw new UpstreamError("Lingxing factOrders returned an unexpected response shape");
+  }
+  return parsedResponse.data.rows;
+}
+
+export const factOrdersDescriptor: ToolDescriptor<FactOrdersInput, FactOrderRow[]> = {
+  id: "lingxing.factOrders",
+  cliSubcommand: "fact-orders",
+  source: "lingxing",
+  description: "Read Lingxing order facts for a seller SKU since an ISO date.",
+  readOnly: true,
+  inputSchema: factOrdersInputSchema,
+  outputSchema: z.array(factOrderRowSchema),
+  requiredSecrets: ["host", "user", "password", "database"],
+  handler: handleFactOrders,
+};
+
+export async function factOrders(ctx: ExecutionContext, input: unknown): Promise<FactOrderRow[]> {
+  return runTool(ctx, async () => handleFactOrders(ctx, parseFactOrdersInput(input)));
 }

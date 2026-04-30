@@ -68,6 +68,21 @@ pcl-tools tool-calls search \
 }
 ```
 
+## MCP usage
+
+Build the package, then point Claude Desktop at the MCP stdio entrypoint:
+
+```json
+{
+  "mcpServers": {
+    "paperclip-data": {
+      "command": "node",
+      "args": ["packages/tool-registry/dist/mcp/stdio.js"]
+    }
+  }
+}
+```
+
 ## Execution Context
 
 | Flag | Type | Required | Description |

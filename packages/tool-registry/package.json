@@ -32,19 +32,21 @@
     "types": "./dist/index.d.ts"
   },
   "bin": {
-    "pcl-tools": "./dist/cli.js"
+    "pcl-tools": "./dist/cli.js",
+    "pcl-tools-mcp": "./dist/mcp/stdio.js"
   },
   "files": [
     "dist"
   ],
   "scripts": {
-    "build": "tsc && mkdir -p dist/tools/lingxing && cp src/tools/lingxing/_query.py dist/tools/lingxing/_query.py && chmod +x dist/cli.js",
+    "build": "tsc && mkdir -p dist/tools/lingxing dist/tools/shopify && cp src/tools/lingxing/_query.py dist/tools/lingxing/_query.py && cp src/tools/shopify/_query.py dist/tools/shopify/_query.py && chmod +x dist/cli.js dist/mcp/stdio.js",
     "clean": "rm -rf dist",
     "typecheck": "tsc --noEmit",
     "test": "vitest",
     "test:run": "vitest run"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@paperclipai/shared": "workspace:*",
     "zod": "^3.24.2"
   },

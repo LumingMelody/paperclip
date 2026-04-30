@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { ExecutionContext } from "../../context.js";
 import { NotFound, UpstreamError, ValidationError } from "../../errors.js";
 import { runTool } from "../../executor.js";
+import type { ToolDescriptor } from "../../registry.js";
 import { queryLingxing } from "./client.js";
 
 const factSkuInputSchema = z
@@ -31,6 +32,7 @@ const factSkuRowSchema = z
 
 const factSkuResponseSchema = z
   .object({
+    version: z.literal("1").optional(),
     row: factSkuRowSchema.nullable(),
   })
   .strict();
@@ -46,20 +48,33 @@ function parseFactSkuInput(input: unknown): FactSkuInput {
   return parsed.data;
 }
 
-export async function factSku(ctx: ExecutionContext, input: unknown): Promise<FactSkuRow> {
-  return runTool(ctx, async () => {
-    const parsedInput = parseFactSkuInput(input);
-    const response = await queryLingxing(ctx.companyId, {
-      op: "factSku",
-      asin: parsedInput.asin,
-    });
-    const parsedResponse = factSkuResponseSchema.safeParse(response);
-    if (!parsedResponse.success) {
-      throw new UpstreamError("Lingxing factSku returned an unexpected response shape");
-    }
-    if (!parsedResponse.data.row) {
-      throw new NotFound(`No Lingxing SKU row found for ASIN ${parsedInput.asin}`);
-    }
-    return parsedResponse.data.row;
+async function handleFactSku(ctx: ExecutionContext, input: FactSkuInput): Promise<FactSkuRow> {
+  const response = await queryLingxing(ctx.companyId, {
+    op: "factSku",
+    asin: input.asin,
   });
+  const parsedResponse = factSkuResponseSchema.safeParse(response);
+  if (!parsedResponse.success) {
+    throw new UpstreamError("Lingxing factSku returned an unexpected response shape");
+  }
+  if (!parsedResponse.data.row) {
+    throw new NotFound(`No Lingxing SKU row found for ASIN ${input.asin}`);
+  }
+  return parsedResponse.data.row;
+}
+
+export const factSkuDescriptor: ToolDescriptor<FactSkuInput, FactSkuRow> = {
+  id: "lingxing.factSku",
+  cliSubcommand: "fact-sku",
+  source: "lingxing",
+  description: "Read Lingxing SKU facts for an Amazon ASIN.",
+  readOnly: true,
+  inputSchema: factSkuInputSchema,
+  outputSchema: factSkuRowSchema,
+  requiredSecrets: ["host", "user", "password", "database"],
+  handler: handleFactSku,
+};
+
+export async function factSku(ctx: ExecutionContext, input: unknown): Promise<FactSkuRow> {
+  return runTool(ctx, async () => handleFactSku(ctx, parseFactSkuInput(input)));
 }

@@ -59,3 +59,17 @@ Task H scope-cut: cannot run live rewire (no MySQL DSN locally; user explicitly
 said "现在不需要跑具体的业务"). Replace H acceptance with: validate CLI shape
 end-to-end against a stubbed query; document the rewire delta as a Phase 2
 "flip the switch" task. Real rewire happens when EP secrets land in tool-secrets.json.
+
+[2026-04-30 evening] Tool registry Phase 2 architecture
+========================================================
+Discussed with: Codex (transcript /tmp/codex-discuss-mcp-and-sources.md)
+Outcome: Accepted all 5 pushbacks; cut scope from "MCP+3 sources" to "MCP+Shopify only".
+
+Decisions:
+- MCP wrap lives INSIDE packages/tool-registry (option A); add second bin `pcl-tools-mcp` next to `pcl-tools`. Do NOT extend packages/mcp-server (control-plane MCP separate from data MCP — different auth, blast radius, operator expectations).
+- Add registry-level tool descriptor as canonical model: { id, description, inputSchema, outputSchema, source, readOnly, requiredSecrets, handler }. Derive BOTH CLI and MCP from it. CLI keeps existing kebab subcommand aliases for backward compat.
+- MCP tool naming: dotted-namespace + camelCase (e.g. `lingxing.factSku`, `shopify.getProduct`). Per MCP spec 2025-06-18 — letters/digits/_-. allowed.
+- Secrets schema: keep tool-secrets.json physically loose (Record<string,string>) but add per-source Zod schemas validated at context construction or first call. Never include secret-derived values in telemetry or argsHash.
+- Standardize subprocess helper contract BEFORE adding new sources: JSON stdin/stdout, structured error envelope ({error, message}), explicit timeout (configurable per tool), stderr capture, no shell interpolation, version field in request payload, test fixtures for each helper.
+- Phase 2 ships ONLY: registry metadata refactor + MCP server + subprocess contract + per-source secret schemas + Shopify read tools (getProduct, listProductsByCollection).
+- Deferred to Phase 3: Meta Marketing API tools, Amazon SP-API tools. Reason: Shopify proves the non-lingxing subprocess pattern; Meta/SP-API have higher-risk dimensions (API versioning, auth shape, rate limits, pagination, marketplace scoping) that warrant the pattern be battle-tested first.

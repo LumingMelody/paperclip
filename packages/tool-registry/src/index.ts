@@ -12,3 +12,7 @@ export {
 } from "./errors.js";
 export type { ToolErrorClass } from "./errors.js";
 export { runTool } from "./executor.js";
+export { findToolByCli, findToolById, registerTool, tools } from "./registry.js";
+export type { ToolDescriptor } from "./registry.js";
+export { runPythonHelper } from "./subprocess.js";
+export type { PythonHelperOptions, PythonHelperRequest } from "./subprocess.js";

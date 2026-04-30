@@ -10,7 +10,7 @@ from typing import Any
 
 
 def emit(payload: dict[str, Any], code: int = 0) -> None:
-    print(json.dumps(payload, ensure_ascii=False))
+    print(json.dumps({"version": "1", **payload}, ensure_ascii=False))
     raise SystemExit(code)
 
 
@@ -47,6 +47,15 @@ def read_request() -> dict[str, Any]:
         emit({"error": "ValidationError", "message": f"Invalid JSON request: {exc}"}, 1)
     if not isinstance(payload, dict):
         emit({"error": "ValidationError", "message": "Request must be a JSON object"}, 1)
+    version = payload.get("version")
+    if version != "1":
+        emit(
+            {
+                "error": "ValidationError",
+                "message": f"unsupported helper protocol version: {version}",
+            },
+            1,
+        )
     return payload
 
 

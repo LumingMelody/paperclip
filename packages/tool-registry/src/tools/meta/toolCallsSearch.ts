@@ -4,6 +4,7 @@ import { z } from "zod";
 import type { ExecutionContext } from "../../context.js";
 import { errorClassNames, ValidationError } from "../../errors.js";
 import { runTool } from "../../executor.js";
+import type { ToolDescriptor } from "../../registry.js";
 import { resolveProjectWorkspace, type ToolCallEntry } from "../../telemetry.js";
 
 const searchInputSchema = z
@@ -64,22 +65,34 @@ async function readJsonl(logPath: string): Promise<ToolCallEntry[]> {
   return entries;
 }
 
-export async function search(ctx: ExecutionContext, input: unknown): Promise<ToolCallEntry[]> {
-  return runTool(ctx, async () => {
-    const parsedInput = parseInput(input);
-    const sinceMs = Date.parse(parsedInput.since);
-    const projectWorkspace = await resolveProjectWorkspace(ctx.companyId, ctx.projectId);
-    const logPath = path.join(projectWorkspace, "tool_calls.jsonl");
-    const entries = await readJsonl(logPath);
+async function handleSearch(ctx: ExecutionContext, input: ToolCallsSearchInput): Promise<ToolCallEntry[]> {
+  const sinceMs = Date.parse(input.since);
+  const projectWorkspace = await resolveProjectWorkspace(ctx.companyId, ctx.projectId);
+  const logPath = path.join(projectWorkspace, "tool_calls.jsonl");
+  const entries = await readJsonl(logPath);
 
-    return entries
-      .filter((entry) => {
-        const entryTime = Date.parse(entry.ts);
-        if (Number.isNaN(entryTime) || entryTime < sinceMs) return false;
-        if (parsedInput.tool && entry.tool !== parsedInput.tool) return false;
-        if (parsedInput.issue && entry.issue !== parsedInput.issue) return false;
-        return true;
-      })
-      .slice(0, 1000);
-  });
+  return entries
+    .filter((entry) => {
+      const entryTime = Date.parse(entry.ts);
+      if (Number.isNaN(entryTime) || entryTime < sinceMs) return false;
+      if (input.tool && entry.tool !== input.tool) return false;
+      if (input.issue && entry.issue !== input.issue) return false;
+      return true;
+    })
+    .slice(0, 1000);
+}
+
+export const toolCallsSearchDescriptor: ToolDescriptor<ToolCallsSearchInput, ToolCallEntry[]> = {
+  id: "toolCalls.search",
+  cliSubcommand: "search",
+  source: "toolCalls",
+  description: "Search Paperclip tool-call telemetry for a project.",
+  readOnly: true,
+  inputSchema: searchInputSchema,
+  outputSchema: z.array(toolCallEntrySchema),
+  handler: handleSearch,
+};
+
+export async function search(ctx: ExecutionContext, input: unknown): Promise<ToolCallEntry[]> {
+  return runTool(ctx, async () => handleSearch(ctx, parseInput(input)));
 }

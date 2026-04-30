@@ -3,6 +3,7 @@ import * as os from "node:os";
 import path from "node:path";
 import { z } from "zod";
 import { SecretsNotConfigured } from "./errors.js";
+import { sourceSecretSchemas, type SourceWithSchema } from "./secrets-schemas.js";
 
 const rawSecretValueSchema = z.union([z.string(), z.number(), z.boolean()]);
 const sourceSecretsSchema = z.record(rawSecretValueSchema);
@@ -15,7 +16,18 @@ export function toolSecretsPath(): string {
   return path.join(os.homedir(), ".paperclip", "tool-secrets.json");
 }
 
-export async function loadCompanySecrets(companyId: string, source: string): Promise<Record<string, string>> {
+function formatSchemaIssuePath(pathParts: Array<string | number>): string {
+  return pathParts.length > 0 ? pathParts.join(".") : "credentials";
+}
+
+function normalizeSecrets(sourceSecrets: Record<string, string | number | boolean>): Record<string, string> {
+  return Object.fromEntries(Object.entries(sourceSecrets).map(([key, value]) => [key, String(value)]));
+}
+
+export async function loadCompanySecrets<S extends SourceWithSchema>(
+  companyId: string,
+  source: S,
+): Promise<z.infer<(typeof sourceSecretSchemas)[S]>> {
   const filePath = toolSecretsPath();
   let raw: string;
   try {
@@ -35,12 +47,12 @@ export async function loadCompanySecrets(companyId: string, source: string): Pro
     throw new SecretsNotConfigured(`Tool secrets file is not valid JSON: ${filePath}`);
   }
 
-  const parsed = toolSecretsFileSchema.safeParse(parsedJson);
-  if (!parsed.success) {
+  const fileParsed = toolSecretsFileSchema.safeParse(parsedJson);
+  if (!fileParsed.success) {
     throw new SecretsNotConfigured(`Tool secrets file has an invalid schema: ${filePath}`);
   }
 
-  const companySecrets = parsed.data.companies[companyId];
+  const companySecrets = fileParsed.data.companies[companyId];
   if (!companySecrets) {
     throw new SecretsNotConfigured(`No tool credentials configured for company ${companyId}`);
   }
@@ -50,5 +62,12 @@ export async function loadCompanySecrets(companyId: string, source: string): Pro
     throw new SecretsNotConfigured(`No ${source} credentials configured for company ${companyId}`);
   }
 
-  return Object.fromEntries(Object.entries(sourceSecrets).map(([key, value]) => [key, String(value)]));
+  const schema = sourceSecretSchemas[source];
+  const secretsParsed = schema.safeParse(normalizeSecrets(sourceSecrets));
+  if (!secretsParsed.success) {
+    const missing = [...new Set(secretsParsed.error.issues.map((issue) => formatSchemaIssuePath(issue.path)))].join(", ");
+    throw new SecretsNotConfigured(`${source} credentials must include: ${missing}`);
+  }
+
+  return secretsParsed.data;
 }
