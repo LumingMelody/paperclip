@@ -293,9 +293,6 @@ else
     --dist-tag "$DIST_TAG"
     --target-version "$TARGET_PUBLISH_VERSION"
   )
-  if [ "$allow_canary_latest" = true ]; then
-    verify_args+=(--allow-canary-latest)
-  fi
   while IFS=$'\t' read -r _pkg_dir pkg_name _pkg_version; do
     [ -z "$pkg_name" ] && continue
     verify_args+=(--package "$pkg_name")

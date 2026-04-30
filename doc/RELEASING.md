@@ -65,7 +65,7 @@ It:
 - publishes under npm dist-tag `canary`
 - waits for npm dist-tags and package manifests to converge
 - verifies that `canary` resolves to the just-published version and that published internal dependencies exist on npm
-- fails by default if npm leaves `latest` pointing at a canary; use `--allow-canary-latest` only when that state is intentional
+- fails if npm leaves `latest` pointing at a canary so the release flow does not silently keep a prerelease on the stable install path
 - creates a git tag `canary/vYYYY.MDD.P-canary.N`
 
 Users install canaries with:
