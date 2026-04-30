@@ -106,6 +106,14 @@ Notes:
 - `packages/db/drizzle.config.ts` reads compiled schema from `dist/schema/*.js`
 - `pnpm db:generate` compiles `packages/db` first
 
+## Tool Registry (`pcl-tools`)
+
+Agents that need warehouse data should prefer the `pcl-tools` CLI over inline
+SQL. It enforces typed args, per-company secrets isolation, and writes
+operational telemetry to `tool_calls.jsonl` per project. Phase 1 covers
+Lingxing reads (`fact-sku`, `fact-orders`) and telemetry search. See
+`packages/tool-registry/README.md`.
+
 ## 7. Verification Before Hand-off
 
 Run this full check before claiming done:

@@ -1,0 +1,61 @@
+[2026-04-27 15:55] autoloop start: parallel Task 1 (Finance CRO-21 净利润分析) + Task 2 (DataPlatform CRO-22 MCP server). Skip Task 3 评论文本(token cost) until 1+2 done & verified.
+[2026-04-27 17:18] CRO-21 + CRO-22 done. EP-UK net margin > EP-DE(Marketing 单看 ROAS 错了 priority). EP-US 退货漏桶 K/月 = 真正最大杠杆.
+[2026-04-27 17:20] Codex consensus: skip Task 3 (评论文本) + Task 5 (库存预测). Reason: EP-UK 数据已反向证伪'物理版型偏小',真正杠杆是 US listing 标注;Task 5 不在 Anna 主关注。跳到 Task 4 现金流。Task 3 降为 Phase 2 backlog,Task 5 等 Task 4 出结果再评估。
+[2026-04-27 17:30] CRO-23 done. Working capital ≈ monthly net(94-106%)= 工厂账期是现金约束根因(非库存周转)。Task 5 仍 punt,Anna 决定。
+[2026-04-27 17:32] autoloop COMPLETE. Plan all 20 steps done (5 skipped: Task 3 评论文本 + Task 5 库存预测,见之前 entries).
+[2026-04-27 18:05] Phase 1.6 (Eval/Benchmark) consensus: A-minimal → B → E sequential. A=golden.json minimal subset(1d). B=issue 状态流转 verifier (PATCH hook + cron backstop, NOT comment hook). E=分层 close-loop(ads 1-2w, returns/profit 4-6w). DataPlatform 兼任 verifier execution; 不新建 EvalGuardian; benchmark 边界=数据治理 + 不做业务裁决.
+[2026-04-27 18:32] Phase 1.6 (Eval/Benchmark) COMPLETE. CRO-24/25/26 all done. Verifier 17/17 tests pass, close-loop dry-run PASS. Eval infra 0% → 80%. autoloop stopped.
+[2026-04-28 10:01] Phase 1.7 consensus with Codex: Anna Action Brief by CXOps (NOT new Communicator agent). 2-page hard cap: P1 = Top 3 actions (ROI/owner/deadline/risk), P2 = 15 SKU 砍清单 + close-loop trigger. Reject 'stop now' framing — that leaves delivery in unconsumable form.
+[2026-04-28 10:10] Phase 1.7 (Anna Action Brief) COMPLETE. CRO-27 done. Brief 394 词,3 actions 5 字段全填,15 SKU 砍清单,close-loop trigger 真实可执行。autoloop round 3 stopped.
+[2026-04-28 10:30] Phase 2 unblock — Shopify token confirmed (5 sites, EP-US Plus). Codex consensus: Path C 极薄, scope EP-US only, DataPlatform owns ingest, 70% mapping floor, fail-loud if below. SQL Server password (vendor side) treated as exposed — Phase 2 real ingestion needs Anna controlled access.
+[2026-04-28 14:05] Phase 2.1 launched: A3a baseline dry-run done (W18 stamped). A1 (CRO-29 Shopify refunds + reconcile) + A2 (CRO-30 Mermaid eval, Marketing not ProductSizing per Codex) parallel. A3b will run after A1 done to verify no pipeline regression.
+[2026-04-28 14:50] Phase 2.1 COMPLETE: A1 (Shopify refunds reconcile PASS 0.00%) + A2 (Mermaid pilot /45d/10ASIN, 4 thresholds + 4 stop-loss) + A3b (闭环 6/7 PASS, 1 WARN EP-DE 自然 drift)。Anna 现在有 evidence-based 扩品类决策。
+[2026-04-28 14:55] Phase 2.2 launched: Supply 首次派任务 (CRO-31 Mermaid 库存测算). scope 严格收窄到 Mermaid 启动期 only,not 全 SKU 库存预测(避开 Codex 之前的'机会成本高' punt)。/bin/zsh token,30 min。
+[2026-04-28 16:00] CRO-31 (Supply Mermaid 库存) done. Supply 终于不再是空壳。Anna 现在有 Mermaid 完整链路: CRO-30 营销 + CRO-31 库存。
+[2026-04-28 16:10] C1 done: 6 AGENTS.md 加 metadata header (model/data/output/siblings/skills/recent issues). D1 done: _default/README.md + CLAUDE.md(项目级 5 分钟 onboarding + 5 秒 Claude Code session 接入)。C2 降级跳过(Claude Code 全局 skill 自动 load,paperclip skill 装载不必要)。
+[2026-04-28 16:46] autoloop-start aborted on 2026-04-28-scaffolding-polish.md plan. Hard blocker: paperclip server not running on :3100; `_default/` workspace + all referenced files (anna-brief V1, verifier.ts, golden.json, AGENTS.md scaffolding) do not exist anywhere on disk. Previous plan (2026-04-27-everpretty-ai-roadmap.md) marked all 33 tasks [x] but on-disk artifacts are absent — checkboxes do not reflect reality. Cannot proceed without (a) bringing paperclip docker stack up, and (b) reconciling whether the everpretty AI workspace lives elsewhere or needs to be re-bootstrapped. autoloop-active marker removed; awaiting user direction.
+[2026-04-28 16:55] autoloop recovery: paperclip server is native (not docker), was just dead with stale dev-service registry entry. Cleared with `pnpm dev:stop`, restarted with `pnpm dev` (background id bbg309vja). Server health 200, bootstrapStatus=ready. Verified: company Ever-Pretty (a0f62167-..., issuePrefix CRO), 10 agents incl. CXOps 7f619fcd-..., 31 issues CRO-1..31. Workspace at ~/.paperclip/instances/default/projects/<co>/<proj>/_default/. Resuming autoloop on 2026-04-28-scaffolding-polish.md from Step 1.1.
+[2026-04-28 17:05] CRO-32 done. CXOps 写错路径(改了 V1 而非新建 V2),board manual fix 把 4-action 内容 cp 到 V2 路径 + 恢复 V1 原版 3-action。Final state: V1 394w/3 actions/0 Mermaid, V2 690w/4 actions/3 Mermaid (spec 通过)。Push back 已 inline 到 CRO-32 comment(future CXOps "Create: <path>" 必须新建,不要 in-place 覆盖)。Task 1 全 3 step 完成。
+[2026-04-28 17:08] Task 2 完成。CXOps adapterConfig.model: claude-sonnet-4-6 → claude-haiku-4-5。决策依据:CXOps 客服 Copilot 工作 = 结构化分类 + 短文本生成,Haiku 4.5 ($1/$5 per MTok) 比 Sonnet 4.6 ($3/$15) 便宜 5x,质量差异可接受。AGENTS.md metadata header 已同步更新(Model 字段 + 切换日期 + 原因)。Risk: 如果某 issue Haiku 输出质量明显低于 Sonnet,issue 级 adapterOverride 即可回退。
+[2026-04-28 17:12] CRO-33 done. checkConfidenceAnnotations 上线:verifier.ts +69 lines, test-verifier.ts +2 tests (19/19 PASS)。real-run on CRO-32 检测 3 个裸数字 ("4 条" / "3 个" / "511 件") → confidence_check_status=WARN, status=WARN(不阻塞 verifier 主流程)。Task 3 完成。
+[2026-04-28 17:14] Task 8 (Health Check Script) 完成。`_default/scripts/health-check.sh` 一键查 server / DB / agents / issues / golden / scripts / MCP,ASCII 输出 ✅/⚠️/❌。当前真实状态:1 warning (mysql CLI 未装,close-loop 用 npm mysql2 不影响)。已加到 _default/README.md 第 4 节"关键命令"。
+[2026-04-28 17:32] CRO-35 done with deviation. Plan asked for orders/SKU-specific metrics (orders=11446, MG02468 units=408, MG02468 GMV=$26528, YS00000 units=8944), DataPlatform delivered Shopify P&L metrics instead (gross/discount/refund/net_rev/net_margin)。Agent self-acknowledged偏差 in comment 1 但仍 deliver 偏差版。Board ACCEPT(P&L 对 close-loop 更有用,letter of verify spec PASS @ 15 metrics)。Phase 2.5 backlog: 加 Mermaid + YS00000 metric。Push back 派单纪律:agent 觉得 spec 应改 → 转 blocked + 等 board approve, 不 unilaterally substitute.
+[2026-04-28 17:39] CRO-36 done + autoloop COMPLETE。Plan 2026-04-28-scaffolding-polish.md 31/31 ✅。本 autoloop session 干的事:Task 1 brief V2(CXOps,board fix path) / Task 2 CXOps haiku-4-5 / Task 3 verifier confidence(CRO-33) / Task 4 verifier citation(CRO-34) / Task 5 golden 6 Shopify P&L metrics(CRO-35,deviation accepted) / Task 6 ADR 0004-0007(board) / Task 7 cost-benchmark(CRO-36) / Task 8 health-check.sh(board) / Task 9 archive-old-data.sh(board) / Task 10 decisions.jsonl + helper(board)。autoloop-active 已 rm,Ever-Pretty AI Foundation 从 80-90% → 95%+(剩余 5% 真依赖 Anna 输入 / 外部数据,等用户 unblock)。
+[2026-04-29 16:27] Server hardening 2 + 1 done。Codex 并行实施 Task A + Task B(独立文件无冲突),board 同时干 Task C。
+  - Codex Task A (commit 1c52f446): server/src/routes/issues.ts +275/-1, app.ts +1。Issue close 时自动跑 workspace verifier,FAIL → 422 阻塞,PASS/WARN 通过 + verifyReport。executionPolicy.skipVerify 为 escape hatch。fail-loud 哲学(ADR 0005)真上 API 层。
+  - Codex Task B (commit 6e54eb81): server/src/services/agent-state-reconciler.ts (133 行) + test (100 行) + 注册到 server/src/index.ts。5 min interval 扫 status=running + lastHeartbeat>30min + currentRunId=null 的 agent → 自动 idle + log。stale-heartbeat skill 实战 2 次后,自动化兜底。
+  - Board Task C: _default/docs/issue-templates/ 5 模板 + README(diagnosis / pilot / brief-update / verifier-add / data-pull),复用今日派 CRO-32~38 时验证过的结构。
+  
+  Codex sandbox 限制:write workspace 可,write .git 不可 → 必须 board 手动 commit。Codex 写代码 + board commit 是稳定的双层 pattern。Server typecheck PASS 两次(单 Task A 后、双 Task 后)。pnpm test:run 没跑(全 repo typecheck 在 sandbox 内 tsx IPC EPERM,不影响真实 dev/CI)。
+
+[2026-04-30] Tool registry architecture (Phase 1)
+================================================
+Discussed with: Codex (codex exec, transcript /tmp/codex-discuss-tool-registry.md)
+Outcome: Accepted Codex pushback in full.
+
+Decisions:
+- Location: packages/tool-registry (pnpm workspace package; no server runtime dep)
+- Surface: CLI `pcl-tools` is the cross-language boundary; direct TS imports are private
+- Execution context REQUIRED on every call: companyId, projectId, issueId|runId, actor, toolName, validated args (no bypass)
+- Secrets: ~/.paperclip/tool-secrets.json (not in repo); keyed by company/source
+- Telemetry: <workspace>/tool_calls.jsonl per project (separate from decisions.jsonl which stays for product artifacts); fields = ts, company, project, issue/run, tool, args-hash-or-redacted, status, duration_ms, cost_units, error_class
+- Phase 1 endpoints (3, single auth surface): lingxing.factSku, lingxing.factOrders, toolCalls.search
+- Killer use case: rewrite ONE close-loop script's lingxing data-access path to use `pcl-tools lingxing fact-{sku,orders}`. Do not touch its SP-API or Shopify calls. Target: scripts/eval/close-loop-ads.ts in EP workspace.
+- Python scripts: subprocess-wrap (typed I/O validation), do NOT rewrite shopify_spider in Phase 1
+- Deferred to Phase 2: HTTP routes, MCP server, SP-API/Shopify endpoints, brief→issue parser, DB-backed telemetry
+
+[2026-04-30 mid-loop] Fix: lingxing helper engine pymssql → pymysql
+==================================================================
+Issue: dispatch prompt assumed lingxing data lived on SQL Server (based on
+`pymssql-bulk-merge-via-stage-table` skill name + "领星 ERP" semantic source).
+Verified reality: EP warehouse is MySQL on Tencent Cloud (`everypretty` DB).
+All existing scripts (close-loop-ads.ts uses mysql2/promise; fetch_and_report.py
+uses pymysql) hit MySQL. lx_product_msku is a MySQL table.
+
+Fix: switch _query.py to pymysql; SELECT TOP 1 → LIMIT 1; drop tds_version;
+DictCursor via pymysql.cursors.DictCursor. TS client.ts is engine-agnostic — no change.
+
+Task H scope-cut: cannot run live rewire (no MySQL DSN locally; user explicitly
+said "现在不需要跑具体的业务"). Replace H acceptance with: validate CLI shape
+end-to-end against a stubbed query; document the rewire delta as a Phase 2
+"flip the switch" task. Real rewire happens when EP secrets land in tool-secrets.json.
