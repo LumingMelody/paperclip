@@ -138,6 +138,10 @@ export function createManifestLookupKey(packageName, version) {
   return `${packageName}@${version}`;
 }
 
+function isRangeVersionSpecifier(version) {
+  return /[\^~*xX><| ]/.test(version);
+}
+
 function resolvePublishedManifest(packageName, version, packageDoc, packageManifestsByKey = new Map()) {
   const directManifest = packageManifestsByKey.get(createManifestLookupKey(packageName, version));
   if (directManifest) {
@@ -173,6 +177,11 @@ export function collectInternalDependencyProblems(
         problems.push(
           `${sectionName} declares ${dependencyName} with a non-string version: ${JSON.stringify(dependencyVersion)}`,
         );
+        continue;
+      }
+
+      // Peer dependency ranges express compatibility, not a manifest that can be fetched directly.
+      if (sectionName === "peerDependencies" && isRangeVersionSpecifier(dependencyVersion)) {
         continue;
       }
 
@@ -269,10 +278,10 @@ export function verifyPackageRegistryState({
 function collectInternalDependencyVersions(manifest) {
   const dependencyVersions = [];
 
-  for (const deps of [
-    manifest.dependencies ?? {},
-    manifest.optionalDependencies ?? {},
-    manifest.peerDependencies ?? {},
+  for (const [sectionName, deps] of [
+    ["dependencies", manifest.dependencies ?? {}],
+    ["optionalDependencies", manifest.optionalDependencies ?? {}],
+    ["peerDependencies", manifest.peerDependencies ?? {}],
   ]) {
     for (const [dependencyName, dependencyVersion] of Object.entries(deps)) {
       if (!dependencyName.startsWith("@paperclipai/")) {
@@ -280,6 +289,10 @@ function collectInternalDependencyVersions(manifest) {
       }
 
       if (typeof dependencyVersion !== "string" || !dependencyVersion) {
+        continue;
+      }
+
+      if (sectionName === "peerDependencies" && isRangeVersionSpecifier(dependencyVersion)) {
         continue;
       }
 

@@ -65,6 +65,19 @@ test("collectInternalDependencyProblems accepts version-specific manifests when 
   );
 });
 
+test("collectInternalDependencyProblems ignores peer dependency range specifiers", () => {
+  const manifest = {
+    peerDependencies: {
+      "@paperclipai/server": "^2026.430.0-canary.0",
+    },
+  };
+
+  assert.deepEqual(
+    collectInternalDependencyProblems(manifest, new Map()),
+    [],
+  );
+});
+
 test("verifyPackageRegistryState tolerates a stale root versions map when dist-tags and direct manifests are correct", () => {
   const packageDocsByName = new Map([
     [
@@ -245,6 +258,39 @@ test("verifyPackageRegistryState still fails when the dist-tag is stale", () => 
       allowCanaryLatest: false,
     }),
     ["@paperclipai/ui: dist-tag canary resolves to 2026.429.0-canary.2, expected 2026.430.0-canary.0"],
+  );
+});
+
+test("verifyPackageRegistryState ignores internal peer dependency ranges", () => {
+  const packageDocsByName = new Map([
+    [
+      "@paperclipai/plugin-sdk",
+      {
+        "dist-tags": {
+          canary: "2026.430.0-canary.0",
+        },
+        versions: {
+          "2026.430.0-canary.0": {
+            peerDependencies: {
+              "@paperclipai/server": "^2026.430.0-canary.0",
+            },
+          },
+        },
+      },
+    ],
+  ]);
+
+  assert.deepEqual(
+    verifyPackageRegistryState({
+      packageName: "@paperclipai/plugin-sdk",
+      packageDoc: packageDocsByName.get("@paperclipai/plugin-sdk"),
+      packageDocsByName,
+      channel: "canary",
+      distTag: "canary",
+      targetVersion: "2026.430.0-canary.0",
+      allowCanaryLatest: false,
+    }),
+    [],
   );
 });
 
