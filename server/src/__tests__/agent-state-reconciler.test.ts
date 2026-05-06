@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { reconcileStaleAgents } from "../services/agent-state-reconciler.ts";
+import {
+  reconcileAgentsOnShutdown,
+  reconcileStaleAgents,
+} from "../services/agent-state-reconciler.ts";
 
 const mockLogActivity = vi.hoisted(() => vi.fn(async () => undefined));
 
@@ -96,5 +99,63 @@ describe("agent state reconciler", () => {
         },
       }),
     );
+  });
+
+  it("shutdown variant ignores staleness threshold and flips every candidate", async () => {
+    const now = new Date("2026-04-29T12:00:00.000Z");
+    const staleHeartbeat = new Date(now.getTime() - 31 * 60_000);
+    const freshHeartbeat = new Date(now.getTime() - 10 * 60_000);
+    const dbStub = createDbStub([
+      { id: "agent-stale", companyId: "company-1", lastHeartbeatAt: staleHeartbeat },
+      { id: "agent-fresh", companyId: "company-1", lastHeartbeatAt: freshHeartbeat },
+      { id: "agent-no-hb", companyId: "company-1", lastHeartbeatAt: null },
+    ]);
+
+    await expect(reconcileAgentsOnShutdown(now, { db: dbStub.db as any })).resolves.toEqual({
+      reconciled: 3,
+    });
+
+    expect(dbStub.updateSet).toHaveBeenCalledTimes(3);
+    // Activity log uses the shutdown-specific action so post-mortem can distinguish.
+    expect(mockLogActivity).toHaveBeenCalledTimes(3);
+    for (const call of mockLogActivity.mock.calls) {
+      expect(call[1]).toEqual(
+        expect.objectContaining({ action: "agent.recovered_on_shutdown" }),
+      );
+    }
+  });
+
+  it("shutdown variant handles agents with null lastHeartbeatAt cleanly", async () => {
+    const now = new Date("2026-04-29T12:00:00.000Z");
+    const dbStub = createDbStub([
+      { id: "agent-no-hb", companyId: "company-1", lastHeartbeatAt: null },
+    ]);
+
+    await expect(reconcileAgentsOnShutdown(now, { db: dbStub.db as any })).resolves.toEqual({
+      reconciled: 1,
+    });
+
+    expect(mockLogActivity).toHaveBeenCalledWith(
+      dbStub.db,
+      expect.objectContaining({
+        details: expect.objectContaining({
+          lastHeartbeatAt: null,
+          staleMinutes: null,
+        }),
+      }),
+    );
+  });
+
+  it("periodic tick still skips agents with null lastHeartbeatAt", async () => {
+    const now = new Date("2026-04-29T12:00:00.000Z");
+    const dbStub = createDbStub([
+      { id: "agent-no-hb", companyId: "company-1", lastHeartbeatAt: null },
+    ]);
+
+    await expect(reconcileStaleAgents(now, { db: dbStub.db as any })).resolves.toEqual({
+      reconciled: 0,
+    });
+
+    expect(dbStub.updateSet).not.toHaveBeenCalled();
   });
 });

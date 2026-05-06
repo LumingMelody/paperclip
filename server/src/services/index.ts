@@ -37,7 +37,11 @@ export {
   PRODUCTIVITY_REVIEW_ORIGIN_KIND,
 } from "./productivity-review.js";
 export { classifyIssueGraphLiveness, type IssueLivenessFinding } from "./recovery/index.js";
-export { reconcileStaleAgents, startAgentStateReconciler } from "./agent-state-reconciler.js";
+export {
+  reconcileAgentsOnShutdown,
+  reconcileStaleAgents,
+  startAgentStateReconciler,
+} from "./agent-state-reconciler.js";
 export { dashboardService } from "./dashboard.js";
 export { sidebarBadgeService } from "./sidebar-badges.js";
 export { sidebarPreferenceService } from "./sidebar-preferences.js";

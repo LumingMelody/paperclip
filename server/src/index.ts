@@ -32,6 +32,7 @@ import {
   feedbackService,
   heartbeatService,
   instanceSettingsService,
+  reconcileAgentsOnShutdown,
   reconcilePersistedRuntimeServicesOnStartup,
   routineService,
   startAgentStateReconciler,
@@ -877,6 +878,26 @@ export async function startServer(): Promise<StartedServer> {
   {
     const shutdown = async (signal: "SIGINT" | "SIGTERM") => {
       agentStateReconciler.stop();
+
+      // Root-cause counterpart to the periodic reconciler tick: flip every
+      // running agent with no live heartbeatRun to idle on this graceful exit
+      // so the next boot doesn't see "ghost running" rows. Bounded with a
+      // short timeout so a hung DB doesn't block process exit indefinitely.
+      try {
+        await Promise.race([
+          reconcileAgentsOnShutdown(new Date(), { db }).then((result) => {
+            if (result.reconciled > 0) {
+              logger.warn(
+                { signal, reconciled: result.reconciled },
+                "recovered ghost running agents on shutdown",
+              );
+            }
+          }),
+          new Promise((resolve) => setTimeout(resolve, 3_000)),
+        ]);
+      } catch (err) {
+        logger.error({ err, signal }, "shutdown agent reconciliation failed");
+      }
 
       const telemetryClient = getTelemetryClient();
       if (telemetryClient) {

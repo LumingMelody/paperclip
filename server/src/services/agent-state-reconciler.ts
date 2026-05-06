@@ -26,16 +26,34 @@ function resolveDb(db?: Db): Db {
   return resolved;
 }
 
+export type ReconcileStaleAgentsOptions = {
+  db?: Db;
+  /**
+   * Minimum age of `lastHeartbeatAt` before an agent is eligible for auto-recovery.
+   * Defaults to 30 minutes during the periodic tick to avoid racing against
+   * agents that are momentarily between heartbeats. Pass 0 (e.g. during
+   * graceful shutdown) to flip every candidate immediately.
+   */
+  minStaleMs?: number;
+  /**
+   * Action recorded in the activity log. Defaults to scheduled-tick wording;
+   * shutdown callers should override so post-mortem can distinguish them.
+   */
+  reasonAction?: string;
+};
+
 export async function reconcileStaleAgents(now: Date): Promise<AgentStateReconcilerResult>;
 export async function reconcileStaleAgents(
   now: Date,
-  opts: { db?: Db },
+  opts: ReconcileStaleAgentsOptions,
 ): Promise<AgentStateReconcilerResult>;
 export async function reconcileStaleAgents(
   now: Date,
-  opts: { db?: Db } = {},
+  opts: ReconcileStaleAgentsOptions = {},
 ): Promise<AgentStateReconcilerResult> {
   const db = resolveDb(opts.db);
+  const minStaleMs = opts.minStaleMs ?? STALE_AGENT_HEARTBEAT_MS;
+  const action = opts.reasonAction ?? "agent.auto_recovered_stale_heartbeat";
   // This schema derives an agent's current run from running heartbeat_runs.
   const candidates = await db
     .select({
@@ -53,10 +71,14 @@ export async function reconcileStaleAgents(
   let reconciled = 0;
 
   for (const agent of candidates) {
-    if (!agent.lastHeartbeatAt) continue;
+    // Without lastHeartbeatAt we can't reason about staleness; skip unless the
+    // caller explicitly disables the staleness check (minStaleMs === 0).
+    if (!agent.lastHeartbeatAt && minStaleMs > 0) continue;
 
-    const staleMs = now.getTime() - agent.lastHeartbeatAt.getTime();
-    if (staleMs < STALE_AGENT_HEARTBEAT_MS) continue;
+    const staleMs = agent.lastHeartbeatAt
+      ? now.getTime() - agent.lastHeartbeatAt.getTime()
+      : Number.POSITIVE_INFINITY;
+    if (staleMs < minStaleMs) continue;
 
     const [updated] = await db
       .update(agents)
@@ -75,19 +97,36 @@ export async function reconcileStaleAgents(
       actorType: "system",
       actorId: "agent_state_reconciler",
       agentId: agent.id,
-      action: "agent.auto_recovered_stale_heartbeat",
+      action,
       entityType: "agent",
       entityId: agent.id,
       details: {
         previousStatus: "running",
         newStatus: "idle",
-        lastHeartbeatAt: agent.lastHeartbeatAt.toISOString(),
-        staleMinutes: Math.floor(staleMs / 60_000),
+        lastHeartbeatAt: agent.lastHeartbeatAt?.toISOString() ?? null,
+        staleMinutes: Number.isFinite(staleMs) ? Math.floor(staleMs / 60_000) : null,
       },
     });
   }
 
   return { reconciled };
+}
+
+/**
+ * Shutdown variant: flip every running agent with no live heartbeatRun to idle
+ * regardless of how recent its lastHeartbeatAt is. Use during graceful server
+ * shutdown so the next boot doesn't see "ghost running" agents that the
+ * reconciler-tick wouldn't catch for 30 minutes.
+ */
+export async function reconcileAgentsOnShutdown(
+  now: Date,
+  opts: { db?: Db } = {},
+): Promise<AgentStateReconcilerResult> {
+  return reconcileStaleAgents(now, {
+    db: opts.db,
+    minStaleMs: 0,
+    reasonAction: "agent.recovered_on_shutdown",
+  });
 }
 
 export function startAgentStateReconciler(
