@@ -9,9 +9,11 @@ export type ShopifyRequest =
   | { op: "getProduct"; handle: string }
   | { op: "listProductsByCollection"; collectionId: string; limit?: number };
 
+// .strict() on both branches: see spapi/client.ts for why z.unknown() in the
+// first member would otherwise swallow list-products responses.
 const shopifyHelperResponseSchema = z.union([
-  z.object({ version: z.literal("1"), product: z.unknown() }),
-  z.object({ version: z.literal("1"), products: z.array(z.unknown()) }),
+  z.object({ version: z.literal("1"), products: z.array(z.unknown()) }).strict(),
+  z.object({ version: z.literal("1"), product: z.unknown() }).strict(),
 ]);
 
 export async function queryShopify(companyId: string, request: ShopifyRequest): Promise<unknown> {

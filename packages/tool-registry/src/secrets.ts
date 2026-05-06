@@ -21,7 +21,14 @@ function formatSchemaIssuePath(pathParts: Array<string | number>): string {
 }
 
 function normalizeSecrets(sourceSecrets: Record<string, string | number | boolean>): Record<string, string> {
-  return Object.fromEntries(Object.entries(sourceSecrets).map(([key, value]) => [key, String(value)]));
+  // Strip documentation/comment keys ($comment, __hint, etc.) so users can
+  // freely annotate their tool-secrets.json without tripping `.strict()`
+  // schema validation. Only `__`- and `$`-prefixed keys are stripped.
+  return Object.fromEntries(
+    Object.entries(sourceSecrets)
+      .filter(([key]) => !key.startsWith("__") && !key.startsWith("$"))
+      .map(([key, value]) => [key, String(value)]),
+  );
 }
 
 export async function loadCompanySecrets<S extends SourceWithSchema>(

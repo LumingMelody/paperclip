@@ -9,9 +9,11 @@ export type MetaRequest =
   | { op: "adAccountSummary"; accountId: string }
   | { op: "adsetPerformance"; accountId: string; since: string; until: string };
 
+// .strict() + array-branch first so adsetPerformance's `rows` array doesn't
+// get swallowed by the first member's z.unknown() (which accepts undefined).
 const metaHelperResponseSchema = z.union([
-  z.object({ version: z.literal("1"), account: z.unknown() }),
-  z.object({ version: z.literal("1"), rows: z.array(z.unknown()) }),
+  z.object({ version: z.literal("1"), rows: z.array(z.unknown()) }).strict(),
+  z.object({ version: z.literal("1"), account: z.unknown() }).strict(),
 ]);
 
 export async function queryMeta(companyId: string, request: MetaRequest): Promise<unknown> {
