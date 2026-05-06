@@ -18,6 +18,8 @@ export const registrySecretSchema = z.object({}).strict();
 
 export const briefsSecretSchema = z.object({}).strict();
 
+export const costsSecretSchema = z.object({}).strict();
+
 export const shopifySecretSchema = z
   .object({
     shop: z.string().regex(/^[a-z0-9-]+$/, "shop must be the subdomain (without .myshopify.com)"),
@@ -52,6 +54,7 @@ export const sourceSecretSchemas = {
   decisions: decisionsSecretSchema,
   registry: registrySecretSchema,
   briefs: briefsSecretSchema,
+  costs: costsSecretSchema,
 } as const;
 
 export type SourceWithSchema = keyof typeof sourceSecretSchemas;
