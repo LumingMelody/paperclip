@@ -39,7 +39,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc && mkdir -p dist/tools/lingxing dist/tools/shopify dist/tools/meta dist/tools/spapi && cp src/tools/lingxing/_query.py dist/tools/lingxing/_query.py && cp src/tools/shopify/_query.py dist/tools/shopify/_query.py && cp src/tools/meta/_query.py dist/tools/meta/_query.py && cp src/tools/spapi/_query.py dist/tools/spapi/_query.py && chmod +x dist/cli.js dist/mcp/stdio.js",
+    "build": "tsc && node scripts/copy-tool-helpers.mjs",
     "clean": "rm -rf dist",
     "typecheck": "tsc --noEmit",
     "test": "vitest",

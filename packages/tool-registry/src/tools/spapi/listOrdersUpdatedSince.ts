@@ -15,7 +15,7 @@ const inputSchema = z
       .string()
       .regex(/^[A-Z0-9]+$/, "marketplaceId must be uppercase alphanumeric")
       .optional(),
-    maxResults: z.number().int().min(1).max(100).optional(),
+    maxResults: z.coerce.number().int().min(1).max(100).optional(),
   })
   .strict();
 
