@@ -7,6 +7,8 @@ import { adsetPerformanceDescriptor } from "./tools/meta/adsetPerformance.js";
 import { toolCallsSearchDescriptor } from "./tools/meta/toolCallsSearch.js";
 import { getProductDescriptor } from "./tools/shopify/getProduct.js";
 import { listProductsByCollectionDescriptor } from "./tools/shopify/listProductsByCollection.js";
+import { getOrderDescriptor } from "./tools/spapi/getOrder.js";
+import { listOrdersUpdatedSinceDescriptor } from "./tools/spapi/listOrdersUpdatedSince.js";
 
 export interface ToolDescriptor<I = unknown, O = unknown> {
   id: string;
@@ -28,6 +30,8 @@ export const tools: ToolDescriptor[] = [
   listProductsByCollectionDescriptor,
   adAccountSummaryDescriptor,
   adsetPerformanceDescriptor,
+  getOrderDescriptor,
+  listOrdersUpdatedSinceDescriptor,
 ];
 
 export function registerTool(t: ToolDescriptor): void {

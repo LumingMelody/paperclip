@@ -27,10 +27,21 @@ export const metaSecretSchema = z
   })
   .strict();
 
+export const spapiSecretSchema = z
+  .object({
+    refreshToken: z.string().min(20),
+    clientId: z.string().min(1),
+    clientSecret: z.string().min(1),
+    region: z.enum(["na", "eu", "fe"]).default("na"),
+    marketplaceId: z.string().regex(/^[A-Z0-9]+$/).default("ATVPDKIKX0DER"),
+  })
+  .strict();
+
 export const sourceSecretSchemas = {
   lingxing: lingxingSecretSchema,
   shopify: shopifySecretSchema,
   meta: metaSecretSchema,
+  spapi: spapiSecretSchema,
   toolCalls: toolCallsSecretSchema,
 } as const;
 
