@@ -36,6 +36,7 @@ const META_SCRIPT_CANDIDATES = [
   // Fallback: meta_spider.py (reads from env, not literal)
   join(HOME, ".claude/skills/meta-ads-reporting/scripts/meta_spider.py"),
 ];
+const LINGXING_CONFIG_PY = join(HOME, "PycharmProjects/lingxing/config.py");
 
 const status = {
   shopify: "missing",
@@ -93,7 +94,10 @@ for (const candidate of META_SCRIPT_CANDIDATES) {
   }
 }
 
-// --- Lingxing (manual) ------------------------------------------------------
+// --- Lingxing ---------------------------------------------------------------
+// MySQL warehouse `everypretty`. Credentials live as a literal dict in
+// ~/PycharmProjects/lingxing/config.py. Parse the DB_CONFIG = {...} block via
+// regex (we tolerate single/double quotes, integer port, trailing comma).
 const lingxing = {
   host: "***",
   port: "3306",
@@ -101,10 +105,35 @@ const lingxing = {
   password: "***",
   database: "everypretty",
   __hint:
-    "Fill from your DB_HOST / DB_USER / DB_PASSWORD shell env vars. " +
-    "Reference: close-loop-ads.ts:89-93 reads these. If you don't have the values, " +
-    "ask whoever set up the cross-channel pipeline; the warehouse is on Tencent Cloud.",
+    `Pulled from ${LINGXING_CONFIG_PY} (DB_CONFIG dict). If the file is missing, ` +
+    "fill DB_HOST/DB_PORT/DB_USER/DB_PASSWORD/DB_NAME (warehouse is Tencent Cloud MySQL).",
 };
+if (existsSync(LINGXING_CONFIG_PY)) {
+  const text = readFileSync(LINGXING_CONFIG_PY, "utf-8");
+  // Match the FIRST `DB_CONFIG = {` (skip DB_CONFIG_MSSQL deliberately).
+  const m = /\bDB_CONFIG\s*=\s*{([\s\S]*?)}/.exec(text);
+  if (m) {
+    const body = m[1];
+    const pick = (key) => {
+      const re = new RegExp(`["']${key}["']\\s*:\\s*(["']?)([^"',\\s]+)\\1`);
+      const hit = re.exec(body);
+      return hit ? hit[2] : null;
+    };
+    const host = pick("host");
+    const port = pick("port");
+    const user = pick("user");
+    const password = pick("password");
+    const database = pick("database");
+    if (host) lingxing.host = host;
+    if (port) lingxing.port = port;
+    if (user) lingxing.user = user;
+    if (password) lingxing.password = password;
+    if (database) lingxing.database = database;
+    if (lingxing.host !== "***" && lingxing.user !== "***" && lingxing.password !== "***") {
+      status.lingxing = "auto";
+    }
+  }
+}
 
 // --- SP-API (manual) --------------------------------------------------------
 const spapi = {
