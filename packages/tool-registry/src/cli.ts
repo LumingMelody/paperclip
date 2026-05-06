@@ -67,12 +67,32 @@ function inputKeyToFlag(key: string): string {
 }
 
 function schemaKeys(desc: ToolDescriptor): string[] {
-  const schema = desc.inputSchema as unknown as {
-    shape?: Record<string, unknown>;
-    _def?: { shape?: Record<string, unknown> | (() => Record<string, unknown>) };
-  };
-  const shape = schema.shape ?? (typeof schema._def?.shape === "function" ? schema._def.shape() : schema._def?.shape);
-  return shape && typeof shape === "object" ? Object.keys(shape) : [];
+  // Walk through ZodEffects (.refine/.transform wrappers) to find the underlying object shape.
+  let node: unknown = desc.inputSchema;
+  for (let i = 0; i < 5; i += 1) {
+    const candidate = node as {
+      shape?: Record<string, unknown>;
+      _def?: {
+        shape?: Record<string, unknown> | (() => Record<string, unknown>);
+        schema?: unknown;
+        innerType?: unknown;
+      };
+    };
+    const shape =
+      candidate.shape ??
+      (typeof candidate._def?.shape === "function" ? candidate._def.shape() : candidate._def?.shape);
+    if (shape && typeof shape === "object") return Object.keys(shape);
+    if (candidate._def?.schema) {
+      node = candidate._def.schema;
+      continue;
+    }
+    if (candidate._def?.innerType) {
+      node = candidate._def.innerType;
+      continue;
+    }
+    break;
+  }
+  return [];
 }
 
 function inputFlags(desc: ToolDescriptor): string[] {

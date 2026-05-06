@@ -20,9 +20,17 @@ export const shopifySecretSchema = z
   })
   .strict();
 
+export const metaSecretSchema = z
+  .object({
+    accessToken: z.string().min(20),
+    apiVersion: z.string().regex(/^v\d+\.\d+$/).default("v20.0"),
+  })
+  .strict();
+
 export const sourceSecretSchemas = {
   lingxing: lingxingSecretSchema,
   shopify: shopifySecretSchema,
+  meta: metaSecretSchema,
   toolCalls: toolCallsSecretSchema,
 } as const;
 

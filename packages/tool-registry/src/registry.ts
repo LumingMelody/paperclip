@@ -2,6 +2,8 @@ import type { ExecutionContext } from "./context.js";
 import type { ZodSchema } from "zod";
 import { factOrdersDescriptor } from "./tools/lingxing/factOrders.js";
 import { factSkuDescriptor } from "./tools/lingxing/factSku.js";
+import { adAccountSummaryDescriptor } from "./tools/meta/adAccountSummary.js";
+import { adsetPerformanceDescriptor } from "./tools/meta/adsetPerformance.js";
 import { toolCallsSearchDescriptor } from "./tools/meta/toolCallsSearch.js";
 import { getProductDescriptor } from "./tools/shopify/getProduct.js";
 import { listProductsByCollectionDescriptor } from "./tools/shopify/listProductsByCollection.js";
@@ -24,6 +26,8 @@ export const tools: ToolDescriptor[] = [
   toolCallsSearchDescriptor,
   getProductDescriptor,
   listProductsByCollectionDescriptor,
+  adAccountSummaryDescriptor,
+  adsetPerformanceDescriptor,
 ];
 
 export function registerTool(t: ToolDescriptor): void {
