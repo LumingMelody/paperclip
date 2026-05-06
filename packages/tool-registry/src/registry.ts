@@ -1,5 +1,6 @@
 import type { ExecutionContext } from "./context.js";
 import type { ZodSchema } from "zod";
+import { briefParseDescriptor } from "./tools/admin/briefParse.js";
 import { decisionsSearchDescriptor } from "./tools/admin/decisionsSearch.js";
 import { registryListDescriptor } from "./tools/admin/registryList.js";
 import { factOrdersDescriptor } from "./tools/lingxing/factOrders.js";
@@ -36,6 +37,7 @@ export const tools: ToolDescriptor[] = [
   listOrdersUpdatedSinceDescriptor,
   decisionsSearchDescriptor,
   registryListDescriptor,
+  briefParseDescriptor,
 ];
 
 export function registerTool(t: ToolDescriptor): void {
