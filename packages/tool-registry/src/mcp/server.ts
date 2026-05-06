@@ -88,19 +88,53 @@ function readString(record: Record<string, unknown>, key: string): string | unde
   return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
+/**
+ * Resolve execution context with the following precedence (most specific first):
+ *
+ * 1. Per-call MCP `_meta` (the agent passed it explicitly — rare in practice
+ *    because Claude Code's tool-call schema doesn't expose `_meta` to LLMs).
+ * 2. Process env vars (PAPERCLIP_COMPANY_ID etc.) — set once when the agent
+ *    runtime spawned the MCP server. This is the common case: paperclip's
+ *    claude_local adapter knows which company/project/issue/agent the run
+ *    belongs to and injects that context as env vars at spawn time.
+ * 3. None → ValidationError listing the still-missing fields.
+ *
+ * actor defaults to "agent" when env vars are present (any MCP tool call
+ * routed through paperclip is by definition an agent action).
+ */
+function readContextFromEnv(): Record<string, string | undefined> {
+  return {
+    companyId: process.env.PAPERCLIP_COMPANY_ID,
+    projectId: process.env.PAPERCLIP_PROJECT_ID,
+    issueId: process.env.PAPERCLIP_ISSUE_ID,
+    runId: process.env.PAPERCLIP_RUN_ID,
+    actor: process.env.PAPERCLIP_ACTOR ?? (process.env.PAPERCLIP_COMPANY_ID ? "agent" : undefined),
+  };
+}
+
 function extractContextFromMeta(meta: unknown, toolId: string, argsHash: string): ExecutionContext {
-  const record = isRecord(meta) ? meta : {};
-  const missing = META_CONTEXT_KEYS.filter((key) => !readString(record, key));
+  const metaRecord = isRecord(meta) ? meta : {};
+  const env = readContextFromEnv();
+
+  const resolve = (key: string): string | undefined => {
+    return readString(metaRecord, key) ?? env[key];
+  };
+
+  const missing = META_CONTEXT_KEYS.filter((key) => !resolve(key));
   if (missing.length > 0) {
-    throw new ValidationError(`execution context missing: ${missing.join(", ")}`);
+    throw new ValidationError(
+      `execution context missing: ${missing.join(", ")}. ` +
+        `Pass via MCP _meta or set PAPERCLIP_COMPANY_ID/PROJECT_ID/ISSUE_ID/ACTOR ` +
+        `env vars when spawning the MCP server.`,
+    );
   }
 
   return assertContext({
-    companyId: readString(record, "companyId"),
-    projectId: readString(record, "projectId"),
-    issueId: readString(record, "issueId"),
-    runId: readString(record, "runId"),
-    actor: readString(record, "actor"),
+    companyId: resolve("companyId"),
+    projectId: resolve("projectId"),
+    issueId: resolve("issueId"),
+    runId: resolve("runId"),
+    actor: resolve("actor"),
     toolName: toolId,
     argsHash,
   });

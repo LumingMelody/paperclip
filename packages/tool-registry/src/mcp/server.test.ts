@@ -159,6 +159,86 @@ describe("createMcpServer", () => {
     }
   });
 
+  it("falls back to PAPERCLIP_* env vars when _meta is omitted", async () => {
+    const original = {
+      company: process.env.PAPERCLIP_COMPANY_ID,
+      project: process.env.PAPERCLIP_PROJECT_ID,
+      issue: process.env.PAPERCLIP_ISSUE_ID,
+      actor: process.env.PAPERCLIP_ACTOR,
+    };
+    process.env.PAPERCLIP_COMPANY_ID = validMeta.companyId;
+    process.env.PAPERCLIP_PROJECT_ID = validMeta.projectId;
+    process.env.PAPERCLIP_ISSUE_ID = validMeta.issueId;
+    // Deliberately omit PAPERCLIP_ACTOR — it should default to "agent"
+    // when company env is set, mirroring how claude_local injects context.
+
+    const server = createMcpServer({ tools: [testDescriptor] });
+    const client = await connect(server);
+    try {
+      runToolMock.mockReset();
+      runToolMock.mockResolvedValueOnce({ envFallback: "ok" });
+
+      const result = await client.callTool({
+        name: testDescriptor.id,
+        arguments: { sku: "SKU-2" },
+        // No _meta passed — server must resolve context from env vars.
+      });
+
+      expect(result.isError).toBeFalsy();
+      expect(runToolMock).toHaveBeenCalledTimes(1);
+      const ctx = runToolMock.mock.calls[0]?.[0] as ExecutionContext;
+      expect(ctx).toMatchObject({
+        companyId: validMeta.companyId,
+        projectId: validMeta.projectId,
+        issueId: validMeta.issueId,
+        actor: "agent",
+        toolName: testDescriptor.id,
+      });
+    } finally {
+      await client.close();
+      await server.close();
+      if (original.company === undefined) delete process.env.PAPERCLIP_COMPANY_ID;
+      else process.env.PAPERCLIP_COMPANY_ID = original.company;
+      if (original.project === undefined) delete process.env.PAPERCLIP_PROJECT_ID;
+      else process.env.PAPERCLIP_PROJECT_ID = original.project;
+      if (original.issue === undefined) delete process.env.PAPERCLIP_ISSUE_ID;
+      else process.env.PAPERCLIP_ISSUE_ID = original.issue;
+      if (original.actor === undefined) delete process.env.PAPERCLIP_ACTOR;
+      else process.env.PAPERCLIP_ACTOR = original.actor;
+    }
+  });
+
+  it("_meta takes precedence over env vars when both are set", async () => {
+    const original = process.env.PAPERCLIP_COMPANY_ID;
+    process.env.PAPERCLIP_COMPANY_ID = "11111111-1111-1111-1111-111111111111";
+    process.env.PAPERCLIP_PROJECT_ID = "22222222-2222-2222-2222-222222222222";
+    process.env.PAPERCLIP_ISSUE_ID = "ENV-1";
+
+    const server = createMcpServer({ tools: [testDescriptor] });
+    const client = await connect(server);
+    try {
+      runToolMock.mockReset();
+      runToolMock.mockResolvedValueOnce({ override: "ok" });
+
+      await client.callTool({
+        name: testDescriptor.id,
+        arguments: { sku: "SKU-3" },
+        _meta: validMeta, // explicit _meta should win
+      });
+
+      const ctx = runToolMock.mock.calls[0]?.[0] as ExecutionContext;
+      expect(ctx.companyId).toBe(validMeta.companyId); // not the env override
+      expect(ctx.issueId).toBe(validMeta.issueId);
+    } finally {
+      await client.close();
+      await server.close();
+      if (original === undefined) delete process.env.PAPERCLIP_COMPANY_ID;
+      else process.env.PAPERCLIP_COMPANY_ID = original;
+      delete process.env.PAPERCLIP_PROJECT_ID;
+      delete process.env.PAPERCLIP_ISSUE_ID;
+    }
+  });
+
   it("returns a ValidationError when tool input fails Zod validation", async () => {
     const server = createMcpServer({ tools: [testDescriptor] });
     const client = await connect(server);

@@ -152,6 +152,18 @@ async function buildClaudeRuntimeConfig(input: ClaudeExecutionInput): Promise<Cl
     typeof envConfig.PAPERCLIP_API_KEY === "string" && envConfig.PAPERCLIP_API_KEY.trim().length > 0;
   const env: Record<string, string> = { ...buildPaperclipEnv(agent) };
   env.PAPERCLIP_RUN_ID = runId;
+  // Inject execution-context env vars so the paperclip-data MCP server
+  // (packages/tool-registry) can resolve company/project/issue/actor without
+  // requiring the agent to pass `_meta` on every tool call. Claude Code's
+  // tool-call interface doesn't expose `_meta` to the LLM, so env-var
+  // injection at spawn time is the supported context-passing path.
+  env.PAPERCLIP_ACTOR = "agent";
+  if (typeof context.projectId === "string" && context.projectId.trim().length > 0) {
+    env.PAPERCLIP_PROJECT_ID = context.projectId.trim();
+  }
+  if (typeof context.issueId === "string" && context.issueId.trim().length > 0) {
+    env.PAPERCLIP_ISSUE_ID = context.issueId.trim();
+  }
 
   const wakeTaskId =
     (typeof context.taskId === "string" && context.taskId.trim().length > 0 && context.taskId.trim()) ||
