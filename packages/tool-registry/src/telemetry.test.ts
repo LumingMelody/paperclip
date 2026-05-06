@@ -73,4 +73,89 @@ describe("telemetry", () => {
 
     await expect(resolveProjectWorkspace("company-1", "project-1")).rejects.toThrow(InstanceLookupFailed);
   });
+
+  it("rotates tool_calls.jsonl when it crosses the size threshold", async () => {
+    await writeInstanceConfig("inst-1", { companyId: "company-1" });
+    const originalThreshold = process.env.PAPERCLIP_TELEMETRY_ROTATE_BYTES;
+    process.env.PAPERCLIP_TELEMETRY_ROTATE_BYTES = "200";
+    try {
+      const projectDir = path.join(
+        mockHome.value,
+        ".paperclip",
+        "instances",
+        "inst-1",
+        "projects",
+        "company-1",
+        "project-1",
+      );
+      const baseEntry = {
+        ts: "2026-04-30T12:00:00.000Z",
+        company: "company-1",
+        project: "project-1",
+        issue: "CRO-99",
+        tool: "lingxing.factSku",
+        argsHash: "a".repeat(64),
+        status: "success",
+        durationMs: 5,
+        costUnits: 0,
+      } as const;
+
+      await recordToolCall({ ...baseEntry });
+      const logPath = path.join(projectDir, "tool_calls.jsonl");
+      expect((await fs.stat(logPath)).size).toBeGreaterThan(0);
+
+      await recordToolCall({ ...baseEntry, ts: "2026-04-30T12:00:01.000Z" });
+
+      const dirEntries = await fs.readdir(projectDir);
+      const archives = dirEntries.filter(
+        (name) => name.startsWith("tool_calls.") && name !== "tool_calls.jsonl" && name.endsWith(".jsonl"),
+      );
+      expect(archives).toHaveLength(1);
+
+      const active = (await fs.readFile(logPath, "utf8")).trim().split("\n");
+      expect(active).toHaveLength(1);
+      expect(JSON.parse(active[0]).ts).toBe("2026-04-30T12:00:01.000Z");
+    } finally {
+      if (originalThreshold === undefined) delete process.env.PAPERCLIP_TELEMETRY_ROTATE_BYTES;
+      else process.env.PAPERCLIP_TELEMETRY_ROTATE_BYTES = originalThreshold;
+    }
+  });
+
+  it("does not rotate below the threshold", async () => {
+    await writeInstanceConfig("inst-1", { companyId: "company-1" });
+    const originalThreshold = process.env.PAPERCLIP_TELEMETRY_ROTATE_BYTES;
+    process.env.PAPERCLIP_TELEMETRY_ROTATE_BYTES = "100000";
+    try {
+      const baseEntry = {
+        ts: "2026-04-30T12:00:00.000Z",
+        company: "company-1",
+        project: "project-1",
+        issue: "CRO-99",
+        tool: "lingxing.factSku",
+        argsHash: "a".repeat(64),
+        status: "success",
+        durationMs: 5,
+        costUnits: 0,
+      } as const;
+      await recordToolCall({ ...baseEntry });
+      await recordToolCall({ ...baseEntry, ts: "2026-04-30T12:00:01.000Z" });
+
+      const dir = path.join(
+        mockHome.value,
+        ".paperclip",
+        "instances",
+        "inst-1",
+        "projects",
+        "company-1",
+        "project-1",
+      );
+      const archives = (await fs.readdir(dir)).filter(
+        (n) => n.startsWith("tool_calls.") && n !== "tool_calls.jsonl",
+      );
+      expect(archives).toEqual([]);
+    } finally {
+      if (originalThreshold === undefined) delete process.env.PAPERCLIP_TELEMETRY_ROTATE_BYTES;
+      else process.env.PAPERCLIP_TELEMETRY_ROTATE_BYTES = originalThreshold;
+    }
+  });
 });

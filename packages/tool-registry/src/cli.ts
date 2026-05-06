@@ -126,6 +126,40 @@ function buildHelpText(toolList: ToolDescriptor[]): string {
       }`,
     );
   }
+  lines.push("");
+  lines.push("Per-tool help: `pcl-tools <source> <subcommand> --help`");
+  return `${lines.join("\n")}\n`;
+}
+
+function buildToolHelpText(desc: ToolDescriptor): string {
+  const lines = [
+    `${desc.id}`,
+    "",
+    desc.description,
+    "",
+    `Source: ${desc.source}    Read-only: ${desc.readOnly}`,
+  ];
+  if (desc.requiredSecrets && desc.requiredSecrets.length > 0) {
+    lines.push(`Required secrets: ${desc.requiredSecrets.join(", ")}`);
+  }
+  lines.push("");
+  lines.push("Usage:");
+  const flags = inputFlags(desc).map((flag) => `--${flag} <value>`).join(" ");
+  lines.push(
+    `  pcl-tools ${cliSourceName(desc.source)} ${desc.cliSubcommand} --company <c> --project <p> --issue <i> --actor <agent|user|system>${
+      flags ? ` ${flags}` : ""
+    }`,
+  );
+  lines.push("");
+  lines.push("Tool-specific flags:");
+  const fields = inputFlags(desc);
+  if (fields.length === 0) {
+    lines.push("  (none)");
+  } else {
+    for (const flag of fields) {
+      lines.push(`  --${flag}`);
+    }
+  }
   return `${lines.join("\n")}\n`;
 }
 
@@ -174,6 +208,14 @@ export async function runCli(
     const parsed = parseCliArgs(argv);
     const values = parsed.values as Record<string, unknown>;
     if (values.help === true) {
+      const [source, subcommand] = parsed.positionals;
+      if (source && subcommand) {
+        const desc = findToolByCli(source, subcommand);
+        if (desc) {
+          io.stdout.write(buildToolHelpText(desc));
+          return 0;
+        }
+      }
       io.stdout.write(buildHelpText(registeredTools));
       return 0;
     }

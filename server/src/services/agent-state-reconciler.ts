@@ -129,6 +129,52 @@ export async function reconcileAgentsOnShutdown(
   });
 }
 
+/**
+ * Heartbeat-run counterpart to {@link reconcileAgentsOnShutdown}: flip every
+ * `heartbeat_runs` row in `running` state to `cancelled` so a graceful shutdown
+ * doesn't leave orphaned in-flight runs that nothing will ever finalize.
+ *
+ * Called from the same shutdown handler. Bounded by a per-call DB write
+ * timeout in the caller (3s) so a hung DB cannot block process exit.
+ */
+export async function cancelOrphanedHeartbeatRunsOnShutdown(
+  now: Date,
+  opts: { db?: Db } = {},
+): Promise<{ cancelled: number }> {
+  const db = resolveDb(opts.db);
+  const orphans = await db
+    .select({
+      id: heartbeatRuns.id,
+      companyId: heartbeatRuns.companyId,
+      agentId: heartbeatRuns.agentId,
+    })
+    .from(heartbeatRuns)
+    .where(eq(heartbeatRuns.status, "running"));
+
+  if (orphans.length === 0) return { cancelled: 0 };
+
+  const updated = await db
+    .update(heartbeatRuns)
+    .set({ status: "cancelled", updatedAt: now })
+    .where(eq(heartbeatRuns.status, "running"))
+    .returning({ id: heartbeatRuns.id });
+
+  for (const orphan of orphans) {
+    await logActivity(db, {
+      companyId: orphan.companyId,
+      actorType: "system",
+      actorId: "agent_state_reconciler",
+      agentId: orphan.agentId,
+      action: "heartbeat_run.cancelled_on_shutdown",
+      entityType: "heartbeat_run",
+      entityId: orphan.id,
+      details: { previousStatus: "running", newStatus: "cancelled" },
+    });
+  }
+
+  return { cancelled: updated.length };
+}
+
 export function startAgentStateReconciler(
   opts: StartAgentStateReconcilerOptions = {},
 ): { stop: () => void } {

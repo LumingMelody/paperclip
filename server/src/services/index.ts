@@ -38,6 +38,7 @@ export {
 } from "./productivity-review.js";
 export { classifyIssueGraphLiveness, type IssueLivenessFinding } from "./recovery/index.js";
 export {
+  cancelOrphanedHeartbeatRunsOnShutdown,
   reconcileAgentsOnShutdown,
   reconcileStaleAgents,
   startAgentStateReconciler,

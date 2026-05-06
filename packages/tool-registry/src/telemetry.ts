@@ -98,9 +98,55 @@ export async function resolveProjectWorkspace(companyId: string, projectId: stri
   return path.join(instancesRoot, matches[0], "projects", companyId, projectId);
 }
 
+/**
+ * Size threshold above which `tool_calls.jsonl` is rotated. Override via
+ * PAPERCLIP_TELEMETRY_ROTATE_BYTES (e.g. set to a small value in tests).
+ * Defaults to 10 MB — at ~250B/line that's ~40k entries per archive.
+ */
+const DEFAULT_ROTATE_BYTES = 10 * 1024 * 1024;
+
+function rotateThresholdBytes(): number {
+  const raw = process.env.PAPERCLIP_TELEMETRY_ROTATE_BYTES;
+  if (!raw) return DEFAULT_ROTATE_BYTES;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_ROTATE_BYTES;
+}
+
+function archiveStamp(now: Date = new Date()): string {
+  return now.toISOString().replace(/[-:]/g, "").replace(/\.\d+Z$/, "Z");
+}
+
+/**
+ * Rotate `tool_calls.jsonl` when it exceeds `rotateThresholdBytes()`. Renames
+ * the active log to `tool_calls.<UTC-stamp>.jsonl` so subsequent appends start
+ * a fresh file. Best-effort: if the rename loses to a concurrent write or the
+ * file disappears, we swallow the error and let the next call retry.
+ */
+async function maybeRotate(logPath: string): Promise<void> {
+  const threshold = rotateThresholdBytes();
+  let size: number;
+  try {
+    const stat = await fs.stat(logPath);
+    size = stat.size;
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException)?.code === "ENOENT") return;
+    throw err;
+  }
+  if (size < threshold) return;
+  const archivePath = logPath.replace(/\.jsonl$/, `.${archiveStamp()}.jsonl`);
+  try {
+    await fs.rename(logPath, archivePath);
+  } catch (err) {
+    // Concurrent rotation or transient FS error — next caller will retry.
+    if ((err as NodeJS.ErrnoException)?.code === "ENOENT") return;
+    throw err;
+  }
+}
+
 export async function recordToolCall(entry: ToolCallEntry): Promise<void> {
   const projectWorkspace = await resolveProjectWorkspace(entry.company, entry.project);
   await fs.mkdir(projectWorkspace, { recursive: true });
   const logPath = path.join(projectWorkspace, "tool_calls.jsonl");
+  await maybeRotate(logPath);
   await fs.appendFile(logPath, `${JSON.stringify(entry)}\n`, { encoding: "utf8", flag: "a" });
 }

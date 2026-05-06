@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  cancelOrphanedHeartbeatRunsOnShutdown,
   reconcileAgentsOnShutdown,
   reconcileStaleAgents,
 } from "../services/agent-state-reconciler.ts";
@@ -157,5 +158,60 @@ describe("agent state reconciler", () => {
     });
 
     expect(dbStub.updateSet).not.toHaveBeenCalled();
+  });
+
+  it("cancelOrphanedHeartbeatRunsOnShutdown flips running heartbeat_runs to cancelled", async () => {
+    const now = new Date("2026-04-29T12:00:00.000Z");
+    const orphans = [
+      { id: "run-1", companyId: "company-1", agentId: "agent-1" },
+      { id: "run-2", companyId: "company-2", agentId: "agent-2" },
+    ];
+
+    // SELECT id, companyId, agentId FROM heartbeat_runs WHERE status='running'
+    const selectWhere = vi.fn(async () => orphans);
+    const selectFrom = vi.fn(() => ({ where: selectWhere }));
+    const select = vi.fn(() => ({ from: selectFrom }));
+
+    // UPDATE heartbeat_runs SET status='cancelled' ... RETURNING id
+    const updateReturning = vi.fn(async () => orphans.map((o) => ({ id: o.id })));
+    const updateWhere = vi.fn(() => ({ returning: updateReturning }));
+    const updateSet = vi.fn(() => ({ where: updateWhere }));
+    const update = vi.fn(() => ({ set: updateSet }));
+
+    const db = { select, update };
+
+    await expect(
+      cancelOrphanedHeartbeatRunsOnShutdown(now, { db: db as any }),
+    ).resolves.toEqual({ cancelled: 2 });
+
+    expect(updateSet).toHaveBeenCalledWith({ status: "cancelled", updatedAt: now });
+    expect(mockLogActivity).toHaveBeenCalledTimes(2);
+    for (const call of mockLogActivity.mock.calls) {
+      expect(call[1]).toEqual(
+        expect.objectContaining({
+          action: "heartbeat_run.cancelled_on_shutdown",
+          entityType: "heartbeat_run",
+          details: expect.objectContaining({
+            previousStatus: "running",
+            newStatus: "cancelled",
+          }),
+        }),
+      );
+    }
+  });
+
+  it("cancelOrphanedHeartbeatRunsOnShutdown short-circuits when nothing is running", async () => {
+    const selectWhere = vi.fn(async () => []);
+    const selectFrom = vi.fn(() => ({ where: selectWhere }));
+    const select = vi.fn(() => ({ from: selectFrom }));
+    const update = vi.fn();
+    const db = { select, update };
+
+    await expect(
+      cancelOrphanedHeartbeatRunsOnShutdown(new Date(), { db: db as any }),
+    ).resolves.toEqual({ cancelled: 0 });
+
+    expect(update).not.toHaveBeenCalled();
+    expect(mockLogActivity).not.toHaveBeenCalled();
   });
 });

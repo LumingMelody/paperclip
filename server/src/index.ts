@@ -32,6 +32,7 @@ import {
   feedbackService,
   heartbeatService,
   instanceSettingsService,
+  cancelOrphanedHeartbeatRunsOnShutdown,
   reconcileAgentsOnShutdown,
   reconcilePersistedRuntimeServicesOnStartup,
   routineService,
@@ -881,22 +882,35 @@ export async function startServer(): Promise<StartedServer> {
 
       // Root-cause counterpart to the periodic reconciler tick: flip every
       // running agent with no live heartbeatRun to idle on this graceful exit
-      // so the next boot doesn't see "ghost running" rows. Bounded with a
-      // short timeout so a hung DB doesn't block process exit indefinitely.
+      // so the next boot doesn't see "ghost running" rows. Also cancel any
+      // heartbeat_runs rows still in 'running' state so the next boot doesn't
+      // see orphaned in-flight runs that nothing will finalize. Both are
+      // bounded with a short timeout so a hung DB doesn't block process exit.
+      const shutdownNow = new Date();
       try {
         await Promise.race([
-          reconcileAgentsOnShutdown(new Date(), { db }).then((result) => {
-            if (result.reconciled > 0) {
-              logger.warn(
-                { signal, reconciled: result.reconciled },
-                "recovered ghost running agents on shutdown",
-              );
-            }
-          }),
+          Promise.all([
+            reconcileAgentsOnShutdown(shutdownNow, { db }).then((result) => {
+              if (result.reconciled > 0) {
+                logger.warn(
+                  { signal, reconciled: result.reconciled },
+                  "recovered ghost running agents on shutdown",
+                );
+              }
+            }),
+            cancelOrphanedHeartbeatRunsOnShutdown(shutdownNow, { db }).then((result) => {
+              if (result.cancelled > 0) {
+                logger.warn(
+                  { signal, cancelled: result.cancelled },
+                  "cancelled orphaned running heartbeat_runs on shutdown",
+                );
+              }
+            }),
+          ]),
           new Promise((resolve) => setTimeout(resolve, 3_000)),
         ]);
       } catch (err) {
-        logger.error({ err, signal }, "shutdown agent reconciliation failed");
+        logger.error({ err, signal }, "shutdown agent/heartbeat reconciliation failed");
       }
 
       const telemetryClient = getTelemetryClient();
