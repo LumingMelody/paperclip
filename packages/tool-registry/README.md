@@ -1,6 +1,15 @@
 # Paperclip Tool Registry
 
-`@paperclipai/tool-registry` provides the `pcl-tools` CLI for agent-safe access to external operating data. Phase 1 keeps the surface narrow: Lingxing warehouse reads and local telemetry search, with typed arguments, per-company secrets isolation, and `tool_calls.jsonl` records written into each project workspace.
+`@paperclipai/tool-registry` is the read-only data and admin tool layer for
+Paperclip agents. It exposes 13 subcommands across 8 sources via two
+transports — `pcl-tools` CLI and `pcl-tools-mcp` MCP stdio server — both
+backed by a single `ToolDescriptor` registry so descriptions, schemas, and
+telemetry stay in lockstep.
+
+Today it covers four data sources (Lingxing MySQL warehouse, Shopify Admin,
+Meta Marketing API, Amazon SP-API) and four admin utilities (telemetry
+search, decisions log, registry introspection, brief parser, costs roll-up).
+All tools are read-only. Write tools and approval gating are Phase 4.
 
 ## Install
 
@@ -11,151 +20,257 @@ pnpm install
 pnpm --filter @paperclipai/tool-registry build
 ```
 
-The package exposes `pcl-tools` from `dist/cli.js` after build:
+This produces two executables:
+
+| Binary | Path | Use |
+|---|---|---|
+| `pcl-tools` | `dist/cli.js` | Cross-language CLI; agents/scripts shell into it |
+| `pcl-tools-mcp` | `dist/mcp/stdio.js` | MCP stdio server; Claude Code/Cursor/OpenClaw etc. mount this |
+
+The Lingxing helper requires `pymysql`:
 
 ```sh
-node packages/tool-registry/dist/cli.js --help
+uv pip install pymysql
 ```
 
-Standalone installation is not supported yet. Use this package from the Paperclip workspace until the package is published with a stable external contract.
+Standalone install (npm publish, external use) is not supported in Phase 3.
 
-## CLI Usage
+## CLI
 
-All commands require execution-context flags so telemetry can be attributed to a company, project, issue, actor, tool name, and argument hash.
-
-Fetch a Lingxing SKU fact row by ASIN:
+Every call requires the execution-context flags so telemetry can attribute
+the action to a company, project, issue, actor, tool name, and arg hash.
+Missing any required context flag exits non-zero with a structured JSON
+error to stderr.
 
 ```sh
+pcl-tools <source> <subcommand> \
+  --company <UUID> --project <UUID> --issue <id> --actor <agent|user|system> \
+  [--run <runId>] \
+  [tool-specific flags…]
+```
+
+`pcl-tools --help` lists every registered subcommand.
+
+### All subcommands (13)
+
+| Source | Subcommand | Tool id | What it does |
+|---|---|---|---|
+| `lingxing` | `fact-sku` | `lingxing.factSku` | Master SKU row by ASIN |
+| `lingxing` | `fact-orders` | `lingxing.factOrders` | Aggregated order rows by SKU + since |
+| `shopify` | `get-product` | `shopify.getProduct` | Shopify product by handle |
+| `shopify` | `list-products-by-collection` | `shopify.listProductsByCollection` | Collection product list |
+| `meta` | `ad-account-summary` | `meta.adAccountSummary` | Meta ad account: name/currency/status/balance |
+| `meta` | `adset-performance` | `meta.adsetPerformance` | Adset insights for a date range |
+| `spapi` | `get-order` | `spapi.getOrder` | Single Amazon order by orderId |
+| `spapi` | `list-orders-updated-since` | `spapi.listOrdersUpdatedSince` | Amazon orders updated after timestamp |
+| `tool-calls` | `search` | `toolCalls.search` | Search per-project telemetry |
+| `decisions` | `search` | `decisions.search` | Search platform `decisions.log` |
+| `registry` | `list` | `registry.list` | List all registered tools (introspection) |
+| `briefs` | `parse` | `briefs.parse` | Parse Anna action brief markdown into structured JSON |
+| `costs` | `rollup` | `costs.rollup` | Aggregate `tool_calls.jsonl` by tool / issue / day / status |
+
+### Examples
+
+```sh
+# Master SKU lookup
 pcl-tools lingxing fact-sku \
-  --company company_123 \
-  --project project_456 \
-  --issue issue_789 \
-  --actor agent \
+  --company $CO --project $PROJ --issue CRO-37 --actor agent \
   --asin B01N9G3JK7
-```
 
-Fetch Lingxing order facts by seller SKU and start date:
-
-```sh
+# Orders since a date
 pcl-tools lingxing fact-orders \
-  --company company_123 \
-  --project project_456 \
-  --issue issue_789 \
-  --actor agent \
-  --sku-id EE00001-US12 \
-  --since 2026-04-01
+  --company $CO --project $PROJ --issue CRO-37 --actor agent \
+  --sku-id EE02083DR-US-08 --since 2026-04-01
+
+# Shopify product by handle
+pcl-tools shopify get-product \
+  --company $CO --project $PROJ --issue CRO-30 --actor agent \
+  --handle mermaid-mg02468
+
+# Meta adset performance
+pcl-tools meta adset-performance \
+  --company $CO --project $PROJ --issue CRO-37 --actor agent \
+  --account-id 138486201 --since 2026-04-22 --until 2026-04-28
+
+# Amazon orders updated since
+pcl-tools spapi list-orders-updated-since \
+  --company $CO --project $PROJ --issue CRO-29 --actor agent \
+  --since 2026-04-29T00:00:00Z --max-results 50
+
+# Telemetry: where did the time go?
+pcl-tools costs rollup \
+  --company $CO --project $PROJ --issue CRO-99 --actor user \
+  --since 2026-04-01 --by tool
+
+# Discover what tools exist
+pcl-tools registry list \
+  --company $CO --project $PROJ --issue CRO-99 --actor agent
+
+# Parse Anna's V3 brief into sections
+pcl-tools briefs parse \
+  --company $CO --project $PROJ --issue CRO-99 --actor user \
+  --path docs/anna-brief/2026-04-30-action-brief-v3.md
 ```
 
-Search recorded tool telemetry:
+Successful commands print JSON to stdout. Errors print
+`{"error":"<ClassName>","message":"…"}` to stderr and exit non-zero.
 
-```sh
-pcl-tools tool-calls search \
-  --company company_123 \
-  --project project_456 \
-  --issue issue_789 \
-  --actor agent \
-  --since 2026-04-01T00:00:00.000Z \
-  --tool lingxing.factOrders \
-  --issue-filter issue_789
-```
+## MCP
 
-`--run <runId>` is optional for every command. Successful commands print JSON to stdout. Errors print JSON to stderr:
-
-```json
-{
-  "error": "ValidationError",
-  "message": "Invalid execution context: actor: Required"
-}
-```
-
-## MCP usage
-
-Build the package, then point Claude Desktop at the MCP stdio entrypoint:
+Build the package, then mount the stdio server in any MCP-aware agent
+runtime. Claude Desktop config:
 
 ```json
 {
   "mcpServers": {
     "paperclip-data": {
       "command": "node",
-      "args": ["packages/tool-registry/dist/mcp/stdio.js"]
+      "args": ["/abs/path/to/packages/tool-registry/dist/mcp/stdio.js"]
     }
   }
 }
 ```
 
-## Execution Context
+The MCP server registers every tool from the same `ToolDescriptor[]` the
+CLI dispatches from — there is no drift between the two transports. Tools
+appear under their dotted `id` (e.g. `lingxing.factSku`).
+
+The MCP handler reads the execution context from the request's `_meta`
+field. Missing required keys (`companyId`, `projectId`, `issueId`, `actor`)
+return a `ValidationError` response (`isError: true`) instead of throwing.
+
+## Execution context
 
 | Flag | Type | Required | Description |
 |---|---|---:|---|
-| `--company` | string | yes | Paperclip company id used for secret lookup and telemetry partitioning. |
-| `--project` | string | yes | Project id used to resolve the project workspace. |
-| `--issue` | string | yes | Issue id attributed to the tool call. |
-| `--actor` | `agent`, `user`, `system` | yes | Caller class recorded in the execution context. |
-| `--run` | string | no | Optional run id written to telemetry. |
+| `--company` | UUID | yes | Paperclip company id; resolves secrets and the per-project telemetry workspace |
+| `--project` | UUID | yes | Project id within the company |
+| `--issue` | string | yes | Issue identifier (e.g. `CRO-37`) — recorded on every telemetry row |
+| `--actor` | enum | yes | `agent` / `user` / `system` |
+| `--run` | string | no | Optional agent-run id forwarded to telemetry |
 
-## Secrets Schema
+## Secrets
 
-Lingxing credentials are read from `~/.paperclip/tool-secrets.json` by company id and source name. See [docs/tool-secrets.example.json](docs/tool-secrets.example.json).
-
-Expected shape:
+Each call's secrets are loaded from `~/.paperclip/tool-secrets.json` (NOT
+the repo). Per-source schemas are validated at load time; missing fields
+produce `SecretsNotConfigured: <source> credentials must include: <fields>`.
+Secret values never appear in telemetry, `argsHash`, or any error message.
 
 ```json
 {
   "companies": {
-    "company_123": {
+    "<companyId>": {
       "lingxing": {
         "host": "your-mysql-host.tencentcdb.com",
         "port": "3306",
         "user": "readonly_user",
-        "password": "REDACTED",
+        "password": "***",
         "database": "everypretty"
+      },
+      "shopify": {
+        "shop": "ever-pretty",
+        "token": "shpat_***",
+        "apiVersion": "2024-10"
+      },
+      "meta": {
+        "accessToken": "EAAB***",
+        "apiVersion": "v20.0"
+      },
+      "spapi": {
+        "refreshToken": "Atzr|***",
+        "clientId": "amzn1.application-oa2-client.***",
+        "clientSecret": "***",
+        "region": "na",
+        "marketplaceId": "ATVPDKIKX0DER"
       }
     }
   }
 }
 ```
 
-## Telemetry Schema
+`docs/tool-secrets.example.json` ships a copy-pasteable starter. Admin
+tools (`tool-calls`, `decisions`, `registry`, `briefs`, `costs`) require
+no secrets.
 
-Telemetry is appended as JSONL at:
+## Telemetry
 
-```txt
-~/.paperclip/instances/<instance>/projects/<companyId>/<projectId>/tool_calls.jsonl
+Every successful or failing tool call appends a JSON line to:
+
+```
+~/.paperclip/instances/<instanceId>/projects/<companyId>/<projectId>/tool_calls.jsonl
 ```
 
-| Field | Type | Required | Description |
-|---|---|---:|---|
-| `ts` | ISO string | yes | Start timestamp for the tool call. |
-| `company` | string | yes | Company id from the execution context. |
-| `project` | string | yes | Project id from the execution context. |
-| `issue` | string | yes | Issue id from the execution context. |
-| `runId` | string | no | Optional run id from `--run`. |
-| `tool` | string | yes | Canonical tool name, for example `lingxing.factOrders`. |
-| `argsHash` | string | yes | SHA-256 hash of normalized command arguments. |
-| `status` | `success`, `error` | yes | Tool outcome. |
-| `durationMs` | number | yes | Wall-clock duration. |
-| `costUnits` | number | no | Reserved for future metered tools; Phase 1 writes `0`. |
-| `errorClass` | string | no | Present when `status` is `error`. |
+| Field | Type | When | Notes |
+|---|---|---|---|
+| `ts` | ISO string | always | UTC timestamp at call start |
+| `company` | string | always | from execution context |
+| `project` | string | always | from execution context |
+| `issue` | string | always | from execution context |
+| `runId` | string | optional | from `--run` |
+| `tool` | string | always | canonical tool id |
+| `argsHash` | string | always | sha256 of canonicalised args, secret-keyed fields redacted |
+| `status` | `success`/`error` | always | outcome |
+| `durationMs` | number | always | wall-clock |
+| `costUnits` | number | optional | reserved for future metered tools |
+| `errorClass` | string | only on error | one of the classes below |
 
-## Error Classes
+Append-only with O_APPEND so concurrent agents can write safely. Aggregate
+queries via `costs.rollup`; raw search via `tool-calls search`.
 
-`pcl-tools` currently exits with code `1` for all command errors and writes the typed class to stderr. The Python Lingxing helper may use internal exit codes, but the CLI normalizes failures into this contract.
+## Error classes
 
 | Name | Exit code | When thrown |
 |---|---:|---|
-| `SecretsNotConfigured` | 1 | Missing, invalid, or incomplete `~/.paperclip/tool-secrets.json` credentials. |
-| `InstanceLookupFailed` | 1 | No unique Paperclip instance can be resolved for the company/project workspace. |
-| `ValidationError` | 1 | CLI flags, execution context, or tool input fail validation. |
-| `UpstreamError` | 1 | Lingxing helper startup, database access, or upstream query execution fails. |
-| `NotFound` | 1 | A read succeeds but the requested fact row is absent. |
-| `InternalError` | 1 | An unexpected non-tool-registry error escapes command handling. |
+| `ValidationError` | 1 | CLI flags, execution context, or tool input fail validation |
+| `SecretsNotConfigured` | 1 | `~/.paperclip/tool-secrets.json` is missing or incomplete for the company/source |
+| `InstanceLookupFailed` | 1 | No unique Paperclip instance for the company (zero or multiple) |
+| `NotFound` | 1 | Tool ran but the requested entity is absent |
+| `UpstreamError` | 2 (CLI normalises to 1) | Subprocess failure, DB/network error, HTTP 5xx |
+| `InternalError` | 2 (CLI normalises to 1) | Programmer-error path |
 
-## Phase 2 Deferred
+## Architecture
 
-- SP-API tools.
-- Shopify tools.
-- Brief-to-issue parser.
+```
+        +----------------------+
+        |  ToolDescriptor[]    |  <- single source of truth
+        |  (src/registry.ts)   |
+        +-----+----------+-----+
+              |          |
+              v          v
+        +-----------+ +-----------+
+        | CLI       | | MCP stdio |
+        | cli.ts    | | mcp/      |
+        +-----+-----+ +-----+-----+
+              |             |
+              v             v
+        +------------------------+
+        | runTool(ctx, fn)       |  <- executor wraps every call
+        | (src/executor.ts)      |     with telemetry, error class
+        +-----+--------+---------+
+              |        |
+              v        v
+        +-------------+   +------------+
+        | tool source |   | telemetry  |
+        | clients     |   | jsonl      |
+        +-------------+   +------------+
+```
 
-## Status
+## Phase status
 
-Phase 1 — Lingxing read-only, file-based telemetry.
+| Phase | Scope | Status |
+|---|---|---|
+| 1 | Lingxing CLI + executor + telemetry | Shipped (`888aa208`) |
+| 2 | Registry refactor + MCP transport + Shopify | Shipped (`8d8324b0`) |
+| 3 | Meta + Amazon SP-API + admin tools (decisions/registry/briefs/costs) | Shipped (`3f0145cb` → `1ab156a5`) |
+| 4 | Write tools (e.g. `shopify.updateProduct`) + approval gating | Deferred |
+| 5 | Paperclip routine wiring (cron-trigger close-loop scripts) | Deferred |
+
+## See also
+
+- `decisions.log` (repo root) — architectural decisions including the
+  `[2026-04-30]` Phase 1, `[mid-loop]` pymssql→pymysql fix, and Phase 2
+  Codex pushback log.
+- `docs/superpowers/plans/2026-04-30-tool-registry-phase{1,2}.md` — the
+  autoloop plan files used during Phase 1+2 implementation.
+- `server/src/services/agent-state-reconciler.ts` — heartbeat reconciler
+  shipped in this same wave; see `[2026-04-29]` decisions for its design.
