@@ -1,5 +1,6 @@
 import type { ExecutionContext } from "./context.js";
 import type { ZodSchema } from "zod";
+import { decisionsSearchDescriptor } from "./tools/admin/decisionsSearch.js";
 import { factOrdersDescriptor } from "./tools/lingxing/factOrders.js";
 import { factSkuDescriptor } from "./tools/lingxing/factSku.js";
 import { adAccountSummaryDescriptor } from "./tools/meta/adAccountSummary.js";
@@ -32,6 +33,7 @@ export const tools: ToolDescriptor[] = [
   adsetPerformanceDescriptor,
   getOrderDescriptor,
   listOrdersUpdatedSinceDescriptor,
+  decisionsSearchDescriptor,
 ];
 
 export function registerTool(t: ToolDescriptor): void {

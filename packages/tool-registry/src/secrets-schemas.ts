@@ -12,6 +12,8 @@ export const lingxingSecretSchema = z
 
 export const toolCallsSecretSchema = z.object({}).strict();
 
+export const decisionsSecretSchema = z.object({}).strict();
+
 export const shopifySecretSchema = z
   .object({
     shop: z.string().regex(/^[a-z0-9-]+$/, "shop must be the subdomain (without .myshopify.com)"),
@@ -43,6 +45,7 @@ export const sourceSecretSchemas = {
   meta: metaSecretSchema,
   spapi: spapiSecretSchema,
   toolCalls: toolCallsSecretSchema,
+  decisions: decisionsSecretSchema,
 } as const;
 
 export type SourceWithSchema = keyof typeof sourceSecretSchemas;
