@@ -221,6 +221,42 @@ def return_trend(conn, account: str, since: str, until: str, granularity: str) -
         return [serialize_row(r) for r in cur.fetchall()]
 
 
+def skus_by_reason(conn, account: str, since: str, reasons: list[str], top: int) -> list[dict[str, Any]]:
+    if not reasons:
+        emit({"error": "ValidationError", "message": "reasons must be a non-empty list of reason codes"}, 1)
+    placeholders = ",".join([f"%(r{i})s" for i in range(len(reasons))])
+    sql = f"""
+        SELECT
+            sku,
+            SUM(CASE WHEN return_reason IN ({placeholders}) THEN 1 ELSE 0 END) AS reasonReturnCount,
+            CAST(SUM(CASE WHEN return_reason IN ({placeholders}) THEN COALESCE(quantity, 0) ELSE 0 END) AS DECIMAL(20,0)) AS reasonUnitsReturned,
+            COUNT(*) AS totalReturnCount,
+            CAST(COALESCE(SUM(quantity), 0) AS DECIMAL(20,0)) AS totalUnitsReturned
+        FROM dm_allretrun_analysis_d
+        WHERE Account = %(account)s
+          AND date >= %(since)s
+          AND sku IS NOT NULL AND sku != ''
+        GROUP BY sku
+        HAVING reasonReturnCount > 0
+        ORDER BY reasonReturnCount DESC
+        LIMIT %(top)s
+    """
+    params: dict[str, Any] = {"account": account, "since": since, "top": top}
+    for i, r in enumerate(reasons):
+        params[f"r{i}"] = r
+    with conn.cursor() as cur:
+        cur.execute(sql, params)
+        rows = cur.fetchall()
+    out = []
+    for r in rows:
+        row = serialize_row(r)
+        total = float(row.get("totalReturnCount") or 0)
+        reason_n = float(row.get("reasonReturnCount") or 0)
+        row["reasonShareOfSku"] = round(reason_n / total, 4) if total > 0 else 0.0
+        out.append(row)
+    return out
+
+
 def main() -> None:
     req = read_request()
     op = req.get("op")
@@ -268,6 +304,14 @@ def main() -> None:
                 since=req["since"],
                 until=req["until"],
                 granularity=req.get("granularity", "week"),
+            )
+        elif op == "skusByReason":
+            rows = skus_by_reason(
+                conn,
+                account=req["account"],
+                since=req["since"],
+                reasons=req.get("reasons") or [],
+                top=int(req.get("top", 10)),
             )
         else:
             emit({"error": "ValidationError", "message": f"unknown op: {op}"}, 1)

@@ -13,6 +13,7 @@ import { returnsBySkuDescriptor } from "./tools/dws/returnsBySku.js";
 import { returnDetailDescriptor } from "./tools/dws/returnDetail.js";
 import { refundCommentsDescriptor } from "./tools/dws/refundComments.js";
 import { returnTrendDescriptor } from "./tools/dws/returnTrend.js";
+import { skusByReasonDescriptor } from "./tools/dws/skusByReason.js";
 import { adAccountSummaryDescriptor } from "./tools/meta/adAccountSummary.js";
 import { adsetPerformanceDescriptor } from "./tools/meta/adsetPerformance.js";
 import { toolCallsSearchDescriptor } from "./tools/meta/toolCallsSearch.js";
@@ -43,6 +44,7 @@ export const tools: ToolDescriptor[] = [
   returnDetailDescriptor,
   refundCommentsDescriptor,
   returnTrendDescriptor,
+  skusByReasonDescriptor,
   toolCallsSearchDescriptor,
   getProductDescriptor,
   listProductsByCollectionDescriptor,

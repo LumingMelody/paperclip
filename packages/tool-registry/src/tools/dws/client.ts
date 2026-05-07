@@ -8,7 +8,8 @@ export type DwsQueryRequest =
   | { op: "returnsBySku"; account: string; since: string; top?: number }
   | { op: "returnDetail"; account: string; sku: string; since: string; limit?: number }
   | { op: "refundComments"; account: string; since: string; skuPrefix?: string; limit?: number }
-  | { op: "returnTrend"; account: string; since: string; until: string; granularity?: "day" | "week" | "month" };
+  | { op: "returnTrend"; account: string; since: string; until: string; granularity?: "day" | "week" | "month" }
+  | { op: "skusByReason"; account: string; since: string; reasons: string[]; top?: number };
 
 const dwsHelperResponseSchema = z
   .object({
