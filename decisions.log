@@ -73,3 +73,9 @@ Decisions:
 - Standardize subprocess helper contract BEFORE adding new sources: JSON stdin/stdout, structured error envelope ({error, message}), explicit timeout (configurable per tool), stderr capture, no shell interpolation, version field in request payload, test fixtures for each helper.
 - Phase 2 ships ONLY: registry metadata refactor + MCP server + subprocess contract + per-source secret schemas + Shopify read tools (getProduct, listProductsByCollection).
 - Deferred to Phase 3: Meta Marketing API tools, Amazon SP-API tools. Reason: Shopify proves the non-lingxing subprocess pattern; Meta/SP-API have higher-risk dimensions (API versioning, auth shape, rate limits, pagination, marketplace scoping) that warrant the pattern be battle-tested first.
+
+# 2026-05-07 — DingTalk bot 与 paperclip agent 平台关系
+- 钉钉 bot (paperclip-dingtalk-bot/) 当前是平行的 mini agent 平台：自带 LLM dispatcher (tabcode/gpt-5.4) / system prompt / SQLite 会话记忆 / 工具调度。与 paperclip 的 issue-driven agent 系统业务平行，仅在 tool-registry / secrets / telemetry 层共享。**已知架构债，不立即修复。**
+- 理想架构：bot 极薄 DingTalk 适配层，转发到 paperclip 的 Concierge agent。阻碍：paperclip server 没有同步 chat-with-agent endpoint（routes 全是 issue / approval / routine）。
+- 触发迁移条件：用户出现高频 "bot ↔ paperclip 联动" 需求（如 bot 派 issue / 读 decisions / paperclip agent 推送钉钉），或多人维护双系统认知成本不可接受。
+- 跟踪 spec: docs/superpowers/plans/2026-05-07-everpretty-bot-future-roadmap.md

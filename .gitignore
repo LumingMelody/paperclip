@@ -56,3 +56,9 @@ tests/release-smoke/test-results/
 tests/release-smoke/playwright-report/
 .superset/
 .claude/worktrees/
+
+# transient working dirs (codex runs, launchd logs)
+_codex-runs/
+_codex-runs-*/
+_logs/
+.claude/scheduled_tasks.lock

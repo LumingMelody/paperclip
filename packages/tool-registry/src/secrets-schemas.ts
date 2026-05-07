@@ -10,6 +10,16 @@ export const lingxingSecretSchema = z
   })
   .strict();
 
+export const dwsSecretSchema = z
+  .object({
+    host: z.string().min(1),
+    port: z.string().regex(/^\d+$/).optional(),
+    user: z.string().min(1),
+    password: z.string(),
+    database: z.string().min(1),
+  })
+  .strict();
+
 export const toolCallsSecretSchema = z.object({}).strict();
 
 export const decisionsSecretSchema = z.object({}).strict();
@@ -47,6 +57,7 @@ export const spapiSecretSchema = z
 
 export const sourceSecretSchemas = {
   lingxing: lingxingSecretSchema,
+  dws: dwsSecretSchema,
   shopify: shopifySecretSchema,
   meta: metaSecretSchema,
   spapi: spapiSecretSchema,

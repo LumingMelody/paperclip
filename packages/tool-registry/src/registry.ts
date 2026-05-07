@@ -8,6 +8,11 @@ import { factOrdersDescriptor } from "./tools/lingxing/factOrders.js";
 import { factSkuDescriptor } from "./tools/lingxing/factSku.js";
 import { stockoutRiskDescriptor } from "./tools/lingxing/stockoutRisk.js";
 import { topSkusDescriptor } from "./tools/lingxing/topSkus.js";
+import { returnReasonsDescriptor } from "./tools/dws/returnReasons.js";
+import { returnsBySkuDescriptor } from "./tools/dws/returnsBySku.js";
+import { returnDetailDescriptor } from "./tools/dws/returnDetail.js";
+import { refundCommentsDescriptor } from "./tools/dws/refundComments.js";
+import { returnTrendDescriptor } from "./tools/dws/returnTrend.js";
 import { adAccountSummaryDescriptor } from "./tools/meta/adAccountSummary.js";
 import { adsetPerformanceDescriptor } from "./tools/meta/adsetPerformance.js";
 import { toolCallsSearchDescriptor } from "./tools/meta/toolCallsSearch.js";
@@ -33,6 +38,11 @@ export const tools: ToolDescriptor[] = [
   factOrdersDescriptor,
   topSkusDescriptor,
   stockoutRiskDescriptor,
+  returnReasonsDescriptor,
+  returnsBySkuDescriptor,
+  returnDetailDescriptor,
+  refundCommentsDescriptor,
+  returnTrendDescriptor,
   toolCallsSearchDescriptor,
   getProductDescriptor,
   listProductsByCollectionDescriptor,
