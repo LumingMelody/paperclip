@@ -152,6 +152,66 @@ def fact_orders(conn, sku_id: str, since: str) -> list[dict[str, Any]]:
     return [serialize_row(row) for row in rows]
 
 
+def top_skus(conn, shop_name: str, since: str, top: int) -> list[dict[str, Any]]:
+    sql = """
+        SELECT
+            m.asin AS asin,
+            m.sku AS sellerSku,
+            MAX(m.item_name) AS productTitle,
+            MAX(m.shop_name) AS shopName,
+            MAX(m.currency_code) AS currencyCode,
+            SUM(COALESCE(m.volume, 0)) AS orderQty,
+            SUM(COALESCE(m.amount, 0)) AS gmvLocal,
+            SUM(COALESCE(m.spend, 0)) AS adSpendLocal,
+            SUM(COALESCE(m.ad_sales_amount, 0)) AS adSalesAmount,
+            SUM(COALESCE(m.return_count, 0)) AS returnCount
+        FROM lx_product_msku m
+        WHERE m.shop_name = %s
+          AND m.start_date >= %s
+          AND COALESCE(m.volume, 0) > 0
+        GROUP BY m.asin, m.sku
+        ORDER BY gmvLocal DESC
+        LIMIT %s
+    """
+    with conn.cursor() as cur:
+        cur.execute(sql, (shop_name, since, int(top)))
+        rows = cur.fetchall()
+    return [serialize_row(r) for r in rows]
+
+
+def stockout_risk(conn, shop_name: str, days: int) -> list[dict[str, Any]]:
+    """Velocity-based stockout estimation using last 14 days of sales.
+
+    NOTE: Lingxing warehouse here doesn't carry live FBA inventory rows;
+    we estimate days-of-cover from order velocity only and surface SKUs
+    where 14-day daily average × `days` exceeds a threshold without
+    knowing the actual stock. The result is "high-velocity SKUs that
+    deserve a manual stock check"; downstream Supply agent should join
+    with FBA inventory to confirm.
+    """
+    sql = """
+        SELECT
+            m.asin AS asin,
+            m.sku AS sellerSku,
+            MAX(m.item_name) AS productTitle,
+            MAX(m.shop_name) AS shopName,
+            SUM(COALESCE(m.volume, 0)) AS qty14d,
+            ROUND(SUM(COALESCE(m.volume, 0)) / 14.0, 2) AS dailyAvg,
+            ROUND(SUM(COALESCE(m.volume, 0)) / 14.0 * %s, 0) AS projectedSalesInWindow
+        FROM lx_product_msku m
+        WHERE m.shop_name = %s
+          AND m.start_date >= DATE_SUB(CURDATE(), INTERVAL 14 DAY)
+        GROUP BY m.asin, m.sku
+        HAVING qty14d > 10
+        ORDER BY dailyAvg DESC
+        LIMIT 50
+    """
+    with conn.cursor() as cur:
+        cur.execute(sql, (int(days), shop_name))
+        rows = cur.fetchall()
+    return [serialize_row(r) for r in rows]
+
+
 def main() -> None:
     request = read_request()
     op = request.get("op")
@@ -169,6 +229,19 @@ def main() -> None:
                 if not isinstance(sku_id, str) or not isinstance(since, str):
                     emit({"error": "ValidationError", "message": "factOrders requires skuId and since"}, 1)
                 emit({"rows": fact_orders(conn, sku_id, since)})
+            if op == "topSkus":
+                shop = request.get("shop")
+                since = request.get("since")
+                top = request.get("top", 10)
+                if not isinstance(shop, str) or not isinstance(since, str):
+                    emit({"error": "ValidationError", "message": "topSkus requires shop and since"}, 1)
+                emit({"rows": top_skus(conn, shop, since, int(top))})
+            if op == "stockoutRisk":
+                shop = request.get("shop")
+                days = request.get("days", 30)
+                if not isinstance(shop, str):
+                    emit({"error": "ValidationError", "message": "stockoutRisk requires shop"}, 1)
+                emit({"rows": stockout_risk(conn, shop, int(days))})
             emit({"error": "ValidationError", "message": f"Unknown op: {op}"}, 1)
         finally:
             conn.close()

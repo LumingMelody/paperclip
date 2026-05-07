@@ -12,6 +12,17 @@ export type LingxingQueryRequest =
       op: "factOrders";
       skuId: string;
       since: string;
+    }
+  | {
+      op: "topSkus";
+      shop: string;
+      since: string;
+      top?: number;
+    }
+  | {
+      op: "stockoutRisk";
+      shop: string;
+      days?: number;
     };
 
 const lingxingHelperResponseSchema = z.union([

@@ -6,6 +6,8 @@ import { decisionsSearchDescriptor } from "./tools/admin/decisionsSearch.js";
 import { registryListDescriptor } from "./tools/admin/registryList.js";
 import { factOrdersDescriptor } from "./tools/lingxing/factOrders.js";
 import { factSkuDescriptor } from "./tools/lingxing/factSku.js";
+import { stockoutRiskDescriptor } from "./tools/lingxing/stockoutRisk.js";
+import { topSkusDescriptor } from "./tools/lingxing/topSkus.js";
 import { adAccountSummaryDescriptor } from "./tools/meta/adAccountSummary.js";
 import { adsetPerformanceDescriptor } from "./tools/meta/adsetPerformance.js";
 import { toolCallsSearchDescriptor } from "./tools/meta/toolCallsSearch.js";
@@ -29,6 +31,8 @@ export interface ToolDescriptor<I = unknown, O = unknown> {
 export const tools: ToolDescriptor[] = [
   factSkuDescriptor,
   factOrdersDescriptor,
+  topSkusDescriptor,
+  stockoutRiskDescriptor,
   toolCallsSearchDescriptor,
   getProductDescriptor,
   listProductsByCollectionDescriptor,
