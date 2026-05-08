@@ -62,3 +62,9 @@ _codex-runs/
 _codex-runs-*/
 _logs/
 .claude/scheduled_tasks.lock
+
+# local backups
+*.bak
+
+# runtime decision log (regenerated)
+decisions.jsonl
