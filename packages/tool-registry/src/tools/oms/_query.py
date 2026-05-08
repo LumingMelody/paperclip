@@ -125,6 +125,113 @@ def b2b_customer_ranking(conn, since: str, until: str | None, top: int) -> list[
         return [serialize_row(r) for r in cur.fetchall()]
 
 
+def dormant_b2b_customers(
+    conn,
+    since: str,
+    until: str | None,
+    dormancy_days: int,
+    include_disabled: bool,
+    top: int,
+) -> list[dict[str, Any]]:
+    sql = """
+        SELECT
+            COALESCE(NULLIF(customer_email, ''), '(unknown)') AS customerEmail,
+            MAX(NULLIF(CONCAT_WS(' ', customer_first_name, customer_last_name), ' ')) AS customerName,
+            MAX(customer_state) AS customerState,
+            COUNT(*) AS orderCount,
+            CAST(COALESCE(SUM(total_price), 0) AS DECIMAL(20,4)) AS totalGmv,
+            CAST(COALESCE(AVG(total_price), 0) AS DECIMAL(20,4)) AS avgOrderValue,
+            MAX(currency) AS currency,
+            MIN(order_created_at) AS firstOrderDate,
+            MAX(order_created_at) AS lastOrderDate,
+            DATEDIFF(CURRENT_DATE, MAX(order_created_at)) AS daysSinceLastOrder,
+            SUM(CASE WHEN financial_status = 'paid' THEN 1 ELSE 0 END) AS paidCount,
+            SUM(CASE WHEN financial_status IN ('refunded', 'partially_refunded') THEN 1 ELSE 0 END) AS refundedCount
+        FROM shopify_order
+        WHERE name LIKE 'E4WHOLESALE%%'
+          AND order_created_at >= %(since)s
+    """
+    params: dict[str, Any] = {"since": since}
+    if until:
+        sql += " AND order_created_at < %(until)s"
+        params["until"] = until
+    sql += """
+        GROUP BY customerEmail
+        HAVING customerEmail != '(unknown)'
+    """
+    if include_disabled:
+        sql += """
+           AND (
+               DATEDIFF(CURRENT_DATE, MAX(order_created_at)) >= %(dormancy_days)s
+               OR MAX(customer_state) = 'disabled'
+           )
+        """
+    else:
+        sql += """
+           AND DATEDIFF(CURRENT_DATE, MAX(order_created_at)) >= %(dormancy_days)s
+        """
+    sql += """
+        ORDER BY daysSinceLastOrder DESC, totalGmv DESC
+        LIMIT %(top)s
+    """
+    params["dormancy_days"] = dormancy_days
+    params["top"] = top
+    with conn.cursor() as cur:
+        cur.execute("SET SESSION TRANSACTION READ ONLY")
+        cur.execute(sql, params)
+        return [serialize_row(r) for r in cur.fetchall()]
+
+
+def inventory_by_warehouse(
+    conn,
+    sku: str | None,
+    warehouse_code: str | None,
+    country: str | None,
+    warehouse_type: str | None,
+    min_available: int,
+    top: int,
+) -> list[dict[str, Any]]:
+    sql = """
+        SELECT
+            i.sku_code AS sku,
+            w.warehouse_code AS warehouseCode,
+            w.warehouse_name AS warehouseName,
+            w.warehouse_type AS warehouseType,
+            w.country_code AS countryCode,
+            i.physical_quantity AS physicalQuantity,
+            i.available_quantity AS availableQuantity,
+            i.frozen_quantity AS frozenQuantity,
+            i.transit_in_quantity AS transitInQuantity,
+            i.transit_out_quantity AS transitOutQuantity,
+            i.defective_quantity AS defectiveQuantity,
+            i.last_sync_time AS lastSyncTime
+        FROM inventory i
+        JOIN warehouses w ON i.warehouse_id = w.id
+        WHERE i.deleted = 0
+          AND w.is_active = 1
+          AND i.available_quantity >= %(min_available)s
+    """
+    params: dict[str, Any] = {"min_available": min_available}
+    if sku:
+        sql += " AND i.sku_code = %(sku)s"
+        params["sku"] = sku
+    if warehouse_code:
+        sql += " AND w.warehouse_code = %(warehouse_code)s"
+        params["warehouse_code"] = warehouse_code
+    if country:
+        sql += " AND w.country_code = %(country)s"
+        params["country"] = country
+    if warehouse_type:
+        sql += " AND w.warehouse_type = %(warehouse_type)s"
+        params["warehouse_type"] = warehouse_type
+    sql += " ORDER BY i.available_quantity DESC LIMIT %(top)s"
+    params["top"] = top
+    with conn.cursor() as cur:
+        cur.execute("SET SESSION TRANSACTION READ ONLY")
+        cur.execute(sql, params)
+        return [serialize_row(r) for r in cur.fetchall()]
+
+
 def main() -> None:
     req = read_request()
     op = req.get("op")
@@ -146,6 +253,25 @@ def main() -> None:
                 since=req["since"],
                 until=req.get("until"),
                 top=int(req.get("top", 20)),
+            )
+        elif op == "dormantB2bCustomers":
+            rows = dormant_b2b_customers(
+                conn,
+                since=req["since"],
+                until=req.get("until"),
+                dormancy_days=int(req.get("dormancyDays", 30)),
+                include_disabled=bool(req.get("includeDisabled", True)),
+                top=int(req.get("top", 30)),
+            )
+        elif op == "inventoryByWarehouse":
+            rows = inventory_by_warehouse(
+                conn,
+                sku=req.get("sku"),
+                warehouse_code=req.get("warehouseCode"),
+                country=req.get("country"),
+                warehouse_type=req.get("warehouseType"),
+                min_available=int(req.get("minAvailable", 0)),
+                top=int(req.get("top", 50)),
             )
         else:
             emit({"error": "ValidationError", "message": f"unknown op: {op}"}, 1)

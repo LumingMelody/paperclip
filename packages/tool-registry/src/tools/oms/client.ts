@@ -5,7 +5,9 @@ import { runPythonHelper } from "../../subprocess.js";
 
 export type OmsQueryRequest =
   | { op: "salesByChannel"; since: string; until?: string }
-  | { op: "b2bCustomerRanking"; since: string; until?: string; top?: number };
+  | { op: "b2bCustomerRanking"; since: string; until?: string; top?: number }
+  | { op: "dormantB2bCustomers"; since: string; until?: string; dormancyDays?: number; includeDisabled?: boolean; top?: number }
+  | { op: "inventoryByWarehouse"; sku?: string; warehouseCode?: string; country?: string; warehouseType?: string; minAvailable?: number; top?: number };
 
 const omsHelperResponseSchema = z
   .object({

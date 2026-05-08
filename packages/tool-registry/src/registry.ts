@@ -19,6 +19,8 @@ import { lowStockDescriptor } from "./tools/fba/lowStock.js";
 import { snapshotHistoryDescriptor } from "./tools/fba/snapshotHistory.js";
 import { salesByChannelDescriptor } from "./tools/oms/salesByChannel.js";
 import { b2bCustomerRankingDescriptor } from "./tools/oms/b2bCustomerRanking.js";
+import { dormantB2bCustomersDescriptor } from "./tools/oms/dormantB2bCustomers.js";
+import { inventoryByWarehouseDescriptor } from "./tools/oms/inventoryByWarehouse.js";
 import { adAccountSummaryDescriptor } from "./tools/meta/adAccountSummary.js";
 import { adsetPerformanceDescriptor } from "./tools/meta/adsetPerformance.js";
 import { toolCallsSearchDescriptor } from "./tools/meta/toolCallsSearch.js";
@@ -55,6 +57,8 @@ export const tools: ToolDescriptor[] = [
   snapshotHistoryDescriptor,
   salesByChannelDescriptor,
   b2bCustomerRankingDescriptor,
+  dormantB2bCustomersDescriptor,
+  inventoryByWarehouseDescriptor,
   toolCallsSearchDescriptor,
   getProductDescriptor,
   listProductsByCollectionDescriptor,
