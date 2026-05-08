@@ -20,6 +20,26 @@ export const dwsSecretSchema = z
   })
   .strict();
 
+export const fbaSecretSchema = z
+  .object({
+    host: z.string().min(1),
+    port: z.string().regex(/^\d+$/).optional(),
+    user: z.string().min(1),
+    password: z.string(),
+    database: z.string().min(1),
+  })
+  .strict();
+
+export const omsSecretSchema = z
+  .object({
+    host: z.string().min(1),
+    port: z.string().regex(/^\d+$/).optional(),
+    user: z.string().min(1),
+    password: z.string(),
+    database: z.string().min(1),
+  })
+  .strict();
+
 export const toolCallsSecretSchema = z.object({}).strict();
 
 export const decisionsSecretSchema = z.object({}).strict();
@@ -58,6 +78,8 @@ export const spapiSecretSchema = z
 export const sourceSecretSchemas = {
   lingxing: lingxingSecretSchema,
   dws: dwsSecretSchema,
+  fba: fbaSecretSchema,
+  oms: omsSecretSchema,
   shopify: shopifySecretSchema,
   meta: metaSecretSchema,
   spapi: spapiSecretSchema,

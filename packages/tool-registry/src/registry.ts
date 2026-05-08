@@ -14,6 +14,11 @@ import { returnDetailDescriptor } from "./tools/dws/returnDetail.js";
 import { refundCommentsDescriptor } from "./tools/dws/refundComments.js";
 import { returnTrendDescriptor } from "./tools/dws/returnTrend.js";
 import { skusByReasonDescriptor } from "./tools/dws/skusByReason.js";
+import { currentInventoryDescriptor } from "./tools/fba/currentInventory.js";
+import { lowStockDescriptor } from "./tools/fba/lowStock.js";
+import { snapshotHistoryDescriptor } from "./tools/fba/snapshotHistory.js";
+import { salesByChannelDescriptor } from "./tools/oms/salesByChannel.js";
+import { b2bCustomerRankingDescriptor } from "./tools/oms/b2bCustomerRanking.js";
 import { adAccountSummaryDescriptor } from "./tools/meta/adAccountSummary.js";
 import { adsetPerformanceDescriptor } from "./tools/meta/adsetPerformance.js";
 import { toolCallsSearchDescriptor } from "./tools/meta/toolCallsSearch.js";
@@ -45,6 +50,11 @@ export const tools: ToolDescriptor[] = [
   refundCommentsDescriptor,
   returnTrendDescriptor,
   skusByReasonDescriptor,
+  currentInventoryDescriptor,
+  lowStockDescriptor,
+  snapshotHistoryDescriptor,
+  salesByChannelDescriptor,
+  b2bCustomerRankingDescriptor,
   toolCallsSearchDescriptor,
   getProductDescriptor,
   listProductsByCollectionDescriptor,
