@@ -1,0 +1,159 @@
+---
+config:
+  theme: base
+  themeVariables:
+    primaryColor: '#fff'
+    primaryTextColor: '#111'
+    lineColor: '#666'
+    fontSize: 13px
+---
+flowchart LR
+
+  %% ─────────── 输入 / 决策驱动方 ───────────
+  subgraph SOURCE["🧑‍💼 Sponsor / Board"]
+    direction TB
+    ANNA["Anna Shi<br/>(Board / Founder)<br/>brief V1 / V2 / V3"]
+    BRIEF["docs/anna-brief/<br/>2026-04-28 V1<br/>2026-04-29 V2<br/>2026-04-30 V3 补丁"]
+  end
+
+  %% ─────────── 数据源 ───────────
+  subgraph EXT["🌐 外部数据源"]
+    direction TB
+    LX["领星 ERP<br/>(SKU 主数据 / 库存)"]
+    SHOPIFY["Shopify Admin API<br/>ever-pretty.com EP-US"]
+    AMAZON["Amazon SP-API<br/>EP-US / EP-UK / EP-DE / EP-FR"]
+    META["Meta Marketing API<br/>(广告投放)"]
+    GADS["Google Ads API<br/>(US / UK / FR)"]
+  end
+
+  %% ─────────── 数据底座 ───────────
+  subgraph DATA["💾 数据底座 — everypretty (MySQL Tencent Cloud)"]
+    direction TB
+    LX_MSKU["lx_product_msku<br/>跨渠道 SKU 主"]
+    V_SKU_PERF["v_sku_performance<br/>跨站点广告 + 销售视图"]
+    V_SKU_MAP["v_sku_map<br/>Shopify ↔ Amazon"]
+    FACT_ORD["fact_orders / fact_returns<br/>fact_reviews / fact_inventory<br/>fact_ads"]
+    GOLDEN["benchmarks/golden.json<br/>9 个 verified 指标 + 容差"]
+  end
+
+  %% ─────────── 工作区 / 知识沉淀 ───────────
+  subgraph WS["📂 _default workspace (paperclip 项目)"]
+    direction TB
+    CONTRACTS["docs/data-contracts/<br/>fact_sku · orders · ads · returns · reviews · inventory"]
+    EVAL_SCR["scripts/eval/<br/>close-loop-ads.ts ⚡<br/>close-loop-returns.ts<br/>verifier.ts (700+ 行 / 21 单测)"]
+    EVAL_OUT["docs/eval/<br/>ads-close-loop-2026-WXX.md<br/>returns-close-loop-2026-04.md"]
+    SVA["docs/shopify-vs-amazon/<br/>cross-channel report<br/>(独立站 16 SKU 缺口)"]
+    TPLS["docs/issue-templates/<br/>diagnosis · pilot · brief-update<br/>verifier-add · data-pull"]
+  end
+
+  %% ─────────── Agents（paperclip 公司里的 10 个）───────────
+  subgraph AGENTS["🤖 Ever-Pretty Agents (10) — claude_local 适配器"]
+    direction TB
+    subgraph EXEC["⚙️ 执行型 (idle)"]
+      direction TB
+      MARK["Marketing<br/>投放调优"]
+      DATA_AG["DataPlatform<br/>数据 / verifier"]
+      FIN["Finance (CFO)<br/>现金流 / 净利润"]
+      SUP["Supply (PM)<br/>库存 / 跨境补货"]
+      CXO["CXOps<br/>客户体验 / 退货"]
+      PSIZE["ProductSizing<br/>尺码 (returns 根因)"]
+    end
+    subgraph STRAT["🎯 战略型 (paused, 按需唤醒)"]
+      direction TB
+      CEO["CEO"]
+      CMO["CMO"]
+      RES["Research"]
+      CTO_AG["CTO"]
+    end
+  end
+
+  %% ─────────── Phase 推进 ───────────
+  subgraph PHASES["📅 Phase 推进时间线 (CRO 工单)"]
+    direction TB
+    PH0["Phase 0 (CRO-14)<br/>Sponsor brief"]
+    PH1A["Phase 1.x — 诊断<br/>ROAS · 净利润 · 现金流<br/>(CRO-16/17/18/20/21/23)"]
+    PH1B["Phase 1.6 — 防幻觉基建<br/>golden + verifier + cron<br/>(CRO-24/25/26/33/34/36)"]
+    PH1C["Phase 1.7 (CRO-27)<br/>Anna Action Brief V1"]
+    PH2A["Phase 2.0-2.2<br/>Shopify EP-US 接入 +<br/>MG02468 上 Amazon 评估<br/>(CRO-28/29/30/31)"]
+    PH2B["Phase 2.3-2.6<br/>Brief V2/V3 + 跨渠道 ROAS<br/>(CRO-32/35/37/38)"]
+  end
+
+  %% ─────────── 决策 / 输出 ───────────
+  subgraph OUT["🎯 5 类决策输出 (agent 给建议,Anna 拍板)"]
+    direction TB
+    D1["📈 投放调整<br/>UK Meta +50% / FR Amazon 加投<br/>(V3 Action #2/#5)"]
+    D2["🛒 产品上下架<br/>MG02468 上 Amazon EP-US<br/>(Phase 2.1)"]
+    D3["🔍 SKU 选品 & 渠道扩张<br/>Shopify 独有 16 SKU 评估<br/>(Phase 2.0 跨渠道报告)"]
+    D4["💰 成本 / 现金流基线<br/>Cost Benchmark<br/>(CRO-36 Phase 1.6.D)"]
+    D5["✅ 数据契约 + 防幻觉<br/>verifier hook 阻断 close<br/>(CRO-25 + 今日 paperclip Phase A)"]
+  end
+
+  %% ─────────── 闭环 ───────────
+  CLOSE["♻️ Close-loop<br/>1-2 周 cadence<br/>跑 close-loop-ads / returns<br/>→ 触发 brief 下一版"]
+
+  %% ─────────── 边 ───────────
+  ANNA --> BRIEF
+  BRIEF --> PH0
+
+  LX --> LX_MSKU
+  SHOPIFY --> V_SKU_PERF
+  AMAZON --> V_SKU_PERF
+  AMAZON --> FACT_ORD
+  META --> FACT_ORD
+  GADS --> FACT_ORD
+  LX_MSKU --> V_SKU_PERF
+  V_SKU_MAP --> V_SKU_PERF
+  V_SKU_PERF --> GOLDEN
+  FACT_ORD --> GOLDEN
+
+  GOLDEN --> EVAL_SCR
+  V_SKU_PERF --> EVAL_SCR
+  EVAL_SCR --> EVAL_OUT
+  V_SKU_PERF --> SVA
+
+  CONTRACTS -.约束.-> EVAL_SCR
+  TPLS -.模板.-> PHASES
+
+  PH0 --> PH1A --> PH1B --> PH1C
+  PH1C --> PH2A --> PH2B
+
+  PH1A --> MARK
+  PH1A --> FIN
+  PH1B --> DATA_AG
+  PH1C --> ANNA
+  PH2A --> SUP
+  PH2A --> DATA_AG
+  PH2B --> MARK
+
+  EXEC --> EVAL_SCR
+
+  EVAL_OUT --> CLOSE
+  CLOSE --> BRIEF
+
+  EVAL_OUT --> D1
+  SVA --> D2
+  SVA --> D3
+  EVAL_OUT --> D4
+  EVAL_SCR --> D5
+  GOLDEN --> D5
+
+  %% ─────────── 样式 ───────────
+  classDef sponsor fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+  classDef ext fill:#fce4ec,stroke:#c2185b,stroke-width:1px
+  classDef data fill:#fff8e1,stroke:#f9a825,stroke-width:1px
+  classDef ws fill:#e0f7fa,stroke:#00838f,stroke-width:1px
+  classDef agent fill:#fff3e0,stroke:#f57c00,stroke-width:1px
+  classDef strategic fill:#fff3e0,stroke:#f57c00,stroke-width:1px,stroke-dasharray: 4 3
+  classDef phase fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+  classDef decision fill:#fde7f3,stroke:#c2185b,stroke-width:2px
+  classDef closeloop fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+
+  class ANNA,BRIEF sponsor
+  class LX,SHOPIFY,AMAZON,META,GADS ext
+  class LX_MSKU,V_SKU_PERF,V_SKU_MAP,FACT_ORD,GOLDEN data
+  class CONTRACTS,EVAL_SCR,EVAL_OUT,SVA,TPLS ws
+  class MARK,DATA_AG,FIN,SUP,CXO,PSIZE agent
+  class CEO,CMO,RES,CTO_AG strategic
+  class PH0,PH1A,PH1B,PH1C,PH2A,PH2B phase
+  class D1,D2,D3,D4,D5 decision
+  class CLOSE closeloop

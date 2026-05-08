@@ -1,0 +1,144 @@
+---
+config:
+  theme: base
+  themeVariables:
+    primaryColor: '#fff'
+    primaryTextColor: '#111'
+    lineColor: '#666'
+    fontSize: 14px
+---
+flowchart LR
+
+  %% ─────────── 输入层 ───────────
+  subgraph INPUT["🧑‍💼 输入层 / 控制源"]
+    direction TB
+    BOARD["Board 用户<br/>(浏览器 UI)"]
+    ANNA["Anna Brief<br/>(markdown V1/V2/V3)"]
+    AGENTAPI["Agent API<br/>(bearer key, scoped)"]
+    EXTAPI["外部回调<br/>(plugin webhooks)"]
+  end
+
+  %% ─────────── Adapters / 运行时 ───────────
+  subgraph ADAPTER["🔌 Agent Adapters (packages/adapters/*)"]
+    direction TB
+    CLAUDE["claude-local"]
+    CODEX["codex-local"]
+    CURSOR["cursor-local"]
+    GEMINI["gemini-local"]
+    OPENCODE["opencode-local"]
+    PILOCAL["pi-local"]
+  end
+
+  %% ─────────── 控制平面（paperclip server）───────────
+  subgraph CORE["🎛 控制平面 server/src — Express API + services"]
+    direction TB
+    ROUTES["routes/<br/>issues / agents / runs / companies / projects"]
+
+    subgraph SVCS["services/"]
+      direction TB
+      ISSUE_SVC["issueService<br/>verifier hook ⚡<br/>(close → spawn verifier.ts)"]
+      AGENT_SVC["agentService<br/>+ heartbeatService"]
+      RECONCILER["agent-state-reconciler ♻️<br/>5-min tick · stale → idle"]
+      RECOVERY["recovery/<br/>(classifyIssueGraphLiveness)"]
+      WORKER_MGR["pluginWorkerManager<br/>plugin lifecycle"]
+      DEVRUNNER["dev-runner<br/>(local supervisor)"]
+      ACTIVITY["activityService<br/>(audit log)"]
+      APPROVAL["approvalService<br/>budget hard-stop"]
+    end
+
+    ROUTES --> SVCS
+  end
+
+  %% ─────────── 存储层 ───────────
+  subgraph STORE["💾 存储层"]
+    direction TB
+    PGLITE["PGlite / Postgres<br/>drizzle schema<br/>(packages/db)"]
+    WORKSPACE["~/.paperclip/instances/&lt;id&gt;/<br/>projects/&lt;co&gt;/&lt;proj&gt;/_default/<br/>(docs / scripts / eval / verifier)"]
+    SECRETS["~/.paperclip/<br/>tool-secrets.json<br/>(per-company)"]
+    TELEMETRY["tool_calls.jsonl<br/>(per project, append-only)"]
+  end
+
+  %% ─────────── Tool Registry（今日 Phase 1）───────────
+  subgraph TOOLS["🔧 packages/tool-registry — pcl-tools CLI ✨"]
+    direction TB
+    CLI["pcl-tools CLI<br/>(node:util.parseArgs)"]
+    EXEC["executor / runTool<br/>execution-context required<br/>+ argsHash + duration + errorClass"]
+    CTX["ExecutionContext<br/>company / project / issue / actor"]
+    ERR["error classes<br/>SecretsNotConfigured / UpstreamError /<br/>ValidationError / NotFound / ..."]
+
+    subgraph TOOLSET["Phase 1 工具集 (3)"]
+      direction TB
+      LX_SKU["lingxing.factSku<br/>(--asin)"]
+      LX_ORD["lingxing.factOrders<br/>(--sku-id --since)"]
+      TC_SEARCH["toolCalls.search<br/>(--since [--tool] [--issue])"]
+    end
+
+    PYHELPER["_query.py<br/>(pymysql, MySQL warehouse)"]
+
+    CLI --> EXEC
+    EXEC --> CTX
+    EXEC -.error.-> ERR
+    EXEC --> LX_SKU
+    EXEC --> LX_ORD
+    EXEC --> TC_SEARCH
+    LX_SKU -- subprocess --> PYHELPER
+    LX_ORD -- subprocess --> PYHELPER
+  end
+
+  %% ─────────── 外部数据源 ───────────
+  subgraph EXT["🌐 外部数据源 (subprocess / 后续 Phase 2)"]
+    direction TB
+    MYSQL["MySQL 数仓<br/>everypretty (Tencent Cloud)<br/>lx_product_msku / v_sku_*"]
+    SP_API["Amazon SP-API<br/>(Phase 2)"]
+    SHOPIFY["Shopify Admin<br/>(Phase 2)"]
+  end
+
+  %% ─────────── UI / 输出 ───────────
+  subgraph OUT["📤 UI / 输出"]
+    direction TB
+    UI["React + Vite Board UI<br/>(ui/)"]
+    INBOX["Inbox / Issue tree<br/>review / approval"]
+    DASH["Dashboard cards<br/>latest run / activity"]
+  end
+
+  %% ─────────── 边 ───────────
+  BOARD --> UI
+  UI -- REST /api --> ROUTES
+  ANNA -.手工/未来自动.-> ROUTES
+  AGENTAPI --> ROUTES
+  EXTAPI --> ROUTES
+
+  ROUTES <-- "drizzle ORM" --> PGLITE
+  ISSUE_SVC -- "spawn verifier.ts" --> WORKSPACE
+  RECONCILER -. heartbeat scan .-> PGLITE
+  RECOVERY -. liveness scan .-> PGLITE
+  WORKER_MGR --> ADAPTER
+  ADAPTER -- run agents --> WORKSPACE
+  ADAPTER -- exec --> CLI
+
+  CLI -. read .-> SECRETS
+  EXEC -- append --> TELEMETRY
+  TC_SEARCH -- read --> TELEMETRY
+  TELEMETRY -. lives in .- WORKSPACE
+  PYHELPER -- "pymysql" --> MYSQL
+
+  ROUTES --> UI
+  ROUTES --> INBOX
+  ACTIVITY --> DASH
+
+  %% ─────────── 样式 ───────────
+  classDef input fill:#e3f2fd,stroke:#1976d2,stroke-width:1px
+  classDef adapter fill:#fff3e0,stroke:#f57c00,stroke-width:1px
+  classDef core fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+  classDef store fill:#fff8e1,stroke:#f9a825,stroke-width:1px
+  classDef tools fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+  classDef ext fill:#fce4ec,stroke:#c2185b,stroke-width:1px
+  classDef out fill:#ede7f6,stroke:#512da8,stroke-width:1px
+
+  class BOARD,ANNA,AGENTAPI,EXTAPI input
+  class CLAUDE,CODEX,CURSOR,GEMINI,OPENCODE,PILOCAL adapter
+  class ROUTES,ISSUE_SVC,AGENT_SVC,RECONCILER,RECOVERY,WORKER_MGR,DEVRUNNER,ACTIVITY,APPROVAL core
+  class PGLITE,WORKSPACE,SECRETS,TELEMETRY store
+  class CLI,EXEC,CTX,ERR,LX_SKU,LX_ORD,TC_SEARCH,PYHELPER tools
+  class MYSQL,SP_API,SHOPIFY ext
+  class UI,INBOX,DASH out
