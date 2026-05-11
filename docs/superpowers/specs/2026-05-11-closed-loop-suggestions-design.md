@@ -61,38 +61,42 @@ End state demo line: *"上次你 5/11 采纳的 S1 (改 EE41981 尺码表): 偏�
 
 ## Data Model
 
-New SQLite table `suggestions` in paperclip server's main DB.
+New `suggestions` table in paperclip's main Postgres DB (Drizzle pg, sibling to `routines` / `issues`).
 
-```sql
-CREATE TABLE suggestions (
-  id              TEXT PRIMARY KEY,        -- uuid v7
-  company_id      TEXT NOT NULL,
-  source_issue_id TEXT NOT NULL,           -- the 周报 issue
-  source_agent_id TEXT NOT NULL,
-  sequence_label  TEXT NOT NULL,           -- 'S1' / 'S2' / 'S3'
-  text            TEXT NOT NULL,           -- '改 EE41981 尺码表加体重对照'
-  metric_tool_id  TEXT NOT NULL,           -- 'dws.returnReasons'
-  metric_args     TEXT NOT NULL,           -- JSON: {shop:"EP-US", sku:"EE41981"}
-  metric_extract  TEXT NOT NULL,           -- JMESPath: 'rows[?returnReason==`too small`].returnCount | sum(@)'
-  direction       TEXT NOT NULL CHECK (direction IN ('decrease','increase')),
-  baseline_value  REAL NOT NULL,
-  baseline_date   TEXT NOT NULL,           -- ISO date when baseline was captured
-  follow_up_days  INTEGER NOT NULL DEFAULT 28,
-  status          TEXT NOT NULL DEFAULT 'proposed'
-                  CHECK (status IN ('proposed','accepted','rejected','measured','dismissed')),
-  adopted_at      TEXT,                    -- ISO datetime when Anna marked 采纳
-  actual_value    REAL,                    -- measured at follow_up
-  actual_date     TEXT,                    -- when measured
-  delta_absolute  REAL,                    -- actual_value - baseline_value
-  delta_percent   REAL,                    -- (delta / baseline) * 100
-  outcome_label   TEXT,                    -- 'improved' / 'unchanged' / 'worsened' / 'inconclusive'
-  created_at      TEXT NOT NULL,
-  updated_at      TEXT NOT NULL,
-  UNIQUE (source_issue_id, sequence_label)
-);
-CREATE INDEX idx_suggestions_status_followup ON suggestions(status, adopted_at, follow_up_days);
-CREATE INDEX idx_suggestions_issue ON suggestions(source_issue_id);
+```typescript
+// packages/db/src/schema/suggestions.ts (final Drizzle schema)
+export const suggestions = pgTable("suggestions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  sourceIssueId: uuid("source_issue_id").notNull().references(() => issues.id, { onDelete: "cascade" }),
+  sourceAgentId: uuid("source_agent_id").notNull().references(() => agents.id),
+  sequenceLabel: text("sequence_label").notNull(),            // 'S1' / 'S2' / 'S3'
+  text: text("text").notNull(),
+  metricToolId: text("metric_tool_id").notNull(),             // 'dws.returnReasons'
+  metricArgs: jsonb("metric_args").$type<Record<string,unknown>>().notNull(),
+  metricExtract: text("metric_extract").notNull(),            // JMESPath
+  direction: text("direction").notNull(),                     // 'decrease' | 'increase'
+  baselineValue: doublePrecision("baseline_value").notNull(),
+  baselineDate: text("baseline_date").notNull(),              // ISO date
+  followUpDays: integer("follow_up_days").notNull().default(28),
+  status: text("status").notNull().default("proposed"),       // proposed|accepted|rejected|measured|dismissed
+  adoptedAt: timestamp("adopted_at", { withTimezone: true }),
+  actualValue: doublePrecision("actual_value"),
+  actualDate: timestamp("actual_date", { withTimezone: true }),
+  deltaAbsolute: doublePrecision("delta_absolute"),
+  deltaPercent: doublePrecision("delta_percent"),
+  outcomeLabel: text("outcome_label"),                        // improved|unchanged|worsened|inconclusive
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+  companyStatusIdx: index("suggestions_company_status_idx").on(t.companyId, t.status),
+  issueIdx: index("suggestions_issue_idx").on(t.sourceIssueId),
+  followUpIdx: index("suggestions_followup_idx").on(t.status, t.adoptedAt),
+  uniqIssueLabel: uniqueIndex("suggestions_issue_label_uniq").on(t.sourceIssueId, t.sequenceLabel),
+}));
 ```
+
+Status / direction / outcome enums enforced in the zod validator (not via Postgres `CHECK` — matches existing routines pattern).
 
 **State machine**:
 ```
@@ -218,7 +222,7 @@ Each phase = one Codex brief (Claude designs / Codex implements, per workflow ru
 1. **Depth**: heavy (first-class entity with table + API)
 2. **Binding**: structured (`metricToolId + args + JMESPath extract + direction`)
 3. **Adoption signal**: DingTalk command (`采纳 S1 S3`) — mobile-first; Web UI deferred
-4. **Storage**: SQLite in paperclip server's main DB via Drizzle (not separate package)
+4. **Storage**: PostgreSQL in paperclip server's main DB (Drizzle pg, same DB as routines/issues) via Drizzle (not separate package)
 5. **JMESPath** for extract (vs custom DSL): mature lib, agent prompt-friendly
 6. **One closed-loop agent**: new dedicated `ClosedLoopChecker` agent (not CXOps overload) for telemetry clarity
 7. **Default `followUpDays`**: 28 (4 weeks — covers Amazon refund window + listing rotation)

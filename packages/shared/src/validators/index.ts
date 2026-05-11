@@ -284,6 +284,7 @@ export {
   type RunRoutine,
   type RotateRoutineTriggerSecret,
 } from "./routine.js";
+export * from "./suggestion.js";
 
 export {
   createCostEventSchema,

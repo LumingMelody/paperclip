@@ -578,6 +578,23 @@ export {
 } from "./validators/index.js";
 
 export {
+  createSuggestionSchema,
+  updateSuggestionSchema,
+  measureSuggestionSchema,
+  listSuggestionsQuerySchema,
+  metricSpecSchema,
+  SUGGESTION_STATUSES,
+  SUGGESTION_DIRECTIONS,
+  SUGGESTION_OUTCOMES,
+} from "./validators/suggestion.js";
+export type {
+  CreateSuggestionInput,
+  UpdateSuggestionInput,
+  MeasureSuggestionInput,
+  ListSuggestionsQuery,
+} from "./validators/suggestion.js";
+
+export {
   createCompanySchema,
   updateCompanySchema,
   updateCompanyBrandingSchema,
