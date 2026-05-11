@@ -192,6 +192,17 @@ proposed ──Anna 采纳──> accepted ──N days──> (measured | dismi
 
 This loop = ONE complete cycle observable end-to-end.
 
+✅ **Phase 4 done 2026-05-11** (mostly):
+- `scripts/paperclip-dingtalk-push.sh` — signed HMAC POST to DingTalk group webhook
+- 5 routine AGENTS.md (Marketing/Supply/ProductSizing/Finance/CXOps) updated with "推送到钉钉" section
+- Bot `intents.parse_accept()` + `suggestions_client.py` + `main.py` accept-fast-path: "采纳 S1 S3" / "拒绝 S2" → PATCH /api/suggestions/{id}
+- End-to-end simulation passed: `parse_accept('采纳 S9')` → `find_by_labels` → `patch_status('accepted')` → DB row status='proposed' → 'accepted', adoptedAt auto-set
+
+**Manual setup still needed before fully live**:
+- Create DingTalk custom group robot, paste webhook URL + HMAC secret into the paperclip-dev launchd plist env (DINGTALK_WEBHOOK_URL / DINGTALK_WEBHOOK_SECRET)
+- Make sure routine agents can read those env vars (they should — launchd injects them)
+- (Optional v2) Switch from group webhook to active DM via bot AccessToken refresh + reply_specified_single_chat for true 1:1 push
+
 ---
 
 ## Acceptance Demo (post-V1)
