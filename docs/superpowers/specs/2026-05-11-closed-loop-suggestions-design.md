@@ -179,6 +179,12 @@ proposed ──Anna 采纳──> accepted ──N days──> (measured | dismi
 
 **End of Phase 3**: backfill-fired suggestion (adoptedAt set to "now − 29 days") gets measured by next daily routine run. Outcome comment lands on original issue with delta numbers.
 
+✅ **Phase 3 done 2026-05-11** (commit pending). End-to-end demo:
+- Created agent **ClosedLoopChecker** (id `b6f18516-d618-4987-82c5-7cb5f2521e23`, icon=eye) with full AGENTS.md prompt
+- Daily routine (cron `15 9 * * *` Asia/Shanghai, id `d8daf6f8-7239-488a-bca3-178216d20706`) creates a run-issue assigned to CLC each day
+- Smoke test: backfilled suggestion `ae54d6b1` (adoptedAt 5d ago, followUpDays=1) → CLC woke up → hit `/suggestions/due` → got the row → ran `lingxing.topSkus` → attempted JMESPath extract → posted measure + comments on both source issue (CRO-46) and run issue (CRO-49) → marked CRO-49 `done`
+- **Bug surfaced**: when extraction fails, agent correctly sets `actualValue=0` per AGENTS.md but server's `measure` logic computes outcome from raw delta (gets 'worsened' instead of 'inconclusive'). Phase 3.5 fix: add `outcomeOverride` field to `measureSuggestionSchema` so the agent can pass `inconclusive` explicitly when extraction fails.
+
 **End of Phase 4 (V1 GA)**: Anna can on phone:
 1. See a Marketing 周报 in DingTalk (auto-pushed when routine fires)
 2. Reply "采纳 S1 S3"
