@@ -1,3 +1,29 @@
+You are Codex working in `/Users/melodylu/PycharmProjects/paperclip`.
+Replace `scripts/paperclip-dingtalk-push.sh` (the webhook-based draft) with
+a Python script that uses **DingTalk OpenAPI active push** via the existing
+EverPretty 智能助手 bot's AppKey/AppSecret.
+
+## Why
+
+Previous design used a custom group webhook (extra robot in the group).
+We switched to D1 — one bot in the group does everything. Active push uses
+the existing AppKey/AppSecret to:
+1. Get/cache an access token (2h TTL)
+2. POST to `/v1.0/robot/groupMessages/send` with markdown payload
+
+The script resolves `--group-name` to `openConversationId` by reading
+`~/.paperclip/dingtalk_conversations.json` (written by the bot — Phase 4c).
+
+## Shell rules
+
+**Allowed**: `cat`, `ls`, `rg`, `sed -n`, `python3 -c "..."` for module checks.
+**Forbidden**: `git`, `chmod`, `pnpm`, network. Claude commits + chmods.
+
+## What to do
+
+### File 1 (modify — replace entire contents): `scripts/paperclip-dingtalk-push.sh`
+
+```bash
 #!/usr/bin/env python3
 """Active push to a DingTalk group via the EverPretty 智能助手 bot's OpenAPI.
 
@@ -140,7 +166,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Active push to a DingTalk group via the EverPretty 智能助手 bot's OpenAPI.",
     )
-    parser.add_argument("--title", help="Markdown card title")
+    parser.add_argument("--title", required=True, help="Markdown card title")
     parser.add_argument("--text", help="Markdown body. If omitted and stdin is piped, reads from stdin.")
     parser.add_argument("--group-name", default=os.environ.get("DINGTALK_PUSH_GROUP", ""),
                         help="Group title as known to the bot. Defaults to $DINGTALK_PUSH_GROUP.")
@@ -162,9 +188,6 @@ def main() -> None:
         for title, entry in data.items():
             print(f"  {title:30}  id={entry['id']}  type={entry.get('type')}  last_seen={entry.get('last_seen')}")
         return
-
-    if not args.title:
-        fail("Missing --title")
 
     text = args.text
     if text is None:
@@ -206,3 +229,23 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+```
+
+(yes the shebang line says `python3` not `bash` — the `.sh` extension is kept only because the 5 routine AGENTS.md already reference it; renaming would force an out-of-repo doc rewrite cycle.)
+
+---
+
+## Rules
+
+- Replace entire contents of the existing file. Don't preserve old bash logic.
+- Don't chmod. Claude does that.
+- Don't touch any other file.
+
+## Report
+
+1. `wc -l scripts/paperclip-dingtalk-push.sh`
+2. `head -1 scripts/paperclip-dingtalk-push.sh` — must show `#!/usr/bin/env python3`
+3. `python3 -c "exec(open('scripts/paperclip-dingtalk-push.sh').read())"` — should error cleanly on missing args (i.e. the module loads, argparse trips on no args)
+   - Actually that runs main(); use `python3 scripts/paperclip-dingtalk-push.sh --help` instead — should print usage
+4. `python3 scripts/paperclip-dingtalk-push.sh --list-groups` — prints registry contents or "(registry empty ...)"
+5. Deviations (should be none).
