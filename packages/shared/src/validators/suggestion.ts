@@ -34,6 +34,7 @@ export const updateSuggestionSchema = z.object({
 export const measureSuggestionSchema = z.object({
   actualValue: z.number().finite(),
   actualDate: z.string().datetime().optional(),
+  outcomeOverride: z.enum(SUGGESTION_OUTCOMES).optional(),
 }).strict();
 
 export const listSuggestionsQuerySchema = z.object({

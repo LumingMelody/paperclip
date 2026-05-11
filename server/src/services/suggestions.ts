@@ -77,7 +77,9 @@ export function suggestionService(db: Db) {
       const deltaAbsolute = actual - baseline;
       const deltaPercent = baseline === 0 ? null : (deltaAbsolute / baseline) * 100;
       let outcomeLabel: "improved" | "unchanged" | "worsened" | "inconclusive" = "inconclusive";
-      if (deltaPercent !== null) {
+      if (input.outcomeOverride) {
+        outcomeLabel = input.outcomeOverride;
+      } else if (deltaPercent !== null) {
         const absPct = Math.abs(deltaPercent);
         if (absPct < 10) {
           outcomeLabel = "unchanged";
