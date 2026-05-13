@@ -8,7 +8,7 @@ import numpy as np
 from loguru import logger
 from tenacity import (
     retry,
-    retry_if_exception_type,
+    retry_if_exception,
     stop_after_attempt,
     wait_exponential,
 )
@@ -22,7 +22,21 @@ class ModelNotLoaded(RuntimeError):
     """A required model is not present in /v1/models."""
 
 
-_RETRYABLE = (httpx.ReadTimeout, httpx.RemoteProtocolError)
+_TRANSPORT_ERRORS = (
+    httpx.ConnectError,
+    httpx.ConnectTimeout,
+    httpx.ReadTimeout,
+    httpx.RemoteProtocolError,
+)
+
+
+def _should_retry(exc: BaseException) -> bool:
+    """Retry on transport errors and 5xx HTTP responses."""
+    if isinstance(exc, _TRANSPORT_ERRORS):
+        return True
+    if isinstance(exc, httpx.HTTPStatusError):
+        return 500 <= exc.response.status_code < 600
+    return False
 
 
 class LMStudioClient:
@@ -57,12 +71,12 @@ class LMStudioClient:
         return "up"
 
     @retry(
-        retry=retry_if_exception_type(_RETRYABLE),
+        retry=retry_if_exception(_should_retry),
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=10),
         reraise=True,
     )
-    async def embed(self, texts: list[str]) -> np.ndarray:
+    async def _embed_once(self, texts: list[str]) -> np.ndarray:
         r = await self._client.post(
             f"{self.base_url}/embeddings",
             json={"model": self.embedding_model, "input": texts},
@@ -70,21 +84,25 @@ class LMStudioClient:
         r.raise_for_status()
         data = r.json()["data"]
         data_sorted = sorted(data, key=lambda d: d["index"])
-        arr = np.array([d["embedding"] for d in data_sorted], dtype=np.float32)
-        return arr
+        return np.array([d["embedding"] for d in data_sorted], dtype=np.float32)
+
+    async def embed(self, texts: list[str]) -> np.ndarray:
+        try:
+            return await self._embed_once(texts)
+        except _TRANSPORT_ERRORS as e:
+            raise LMStudioUnavailable(str(e)) from e
 
     @retry(
-        retry=retry_if_exception_type(_RETRYABLE),
+        retry=retry_if_exception(_should_retry),
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=10),
         reraise=True,
     )
-    async def chat(
+    async def _chat_once(
         self,
         prompt: str,
-        system_prompt: str | None = None,
-        history: list[dict[str, Any]] | None = None,
-        **_: Any,
+        system_prompt: str | None,
+        history: list[dict[str, Any]] | None,
     ) -> str:
         messages: list[dict[str, Any]] = []
         if system_prompt:
@@ -98,7 +116,22 @@ class LMStudioClient:
             json={"model": self.llm_model, "messages": messages, "stream": False},
         )
         r.raise_for_status()
-        return r.json()["choices"][0]["message"]["content"]
+        choices = r.json().get("choices", [])
+        if not choices:
+            raise LMStudioUnavailable("empty choices in chat completion response")
+        return choices[0]["message"]["content"]
+
+    async def chat(
+        self,
+        prompt: str,
+        system_prompt: str | None = None,
+        history: list[dict[str, Any]] | None = None,
+        **_: Any,
+    ) -> str:
+        try:
+            return await self._chat_once(prompt, system_prompt, history)
+        except _TRANSPORT_ERRORS as e:
+            raise LMStudioUnavailable(str(e)) from e
 
     async def aclose(self) -> None:
         await self._client.aclose()

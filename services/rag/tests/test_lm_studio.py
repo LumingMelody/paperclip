@@ -1,3 +1,4 @@
+import httpx
 import numpy as np
 import pytest
 import respx
@@ -46,7 +47,7 @@ async def test_healthcheck_model_missing(respx_mock):
 @pytest.mark.asyncio
 async def test_healthcheck_unreachable(respx_mock):
     respx_mock.get("http://127.0.0.1:1234/v1/models").mock(
-        side_effect=__import__("httpx").ConnectError("boom")
+        side_effect=httpx.ConnectError("boom")
     )
     c = LMStudioClient(
         base_url="http://127.0.0.1:1234/v1",
@@ -91,3 +92,29 @@ async def test_chat_returns_text(respx_mock):
     )
     out = await c.chat("hello")
     assert out == "hi there"
+
+
+@pytest.mark.asyncio
+async def test_embed_wraps_connect_error(respx_mock):
+    respx_mock.post("http://127.0.0.1:1234/v1/embeddings").mock(
+        side_effect=httpx.ConnectError("refused")
+    )
+    c = LMStudioClient(
+        base_url="http://127.0.0.1:1234/v1",
+        llm_model="x", embedding_model="y",
+    )
+    with pytest.raises(LMStudioUnavailable):
+        await c.embed(["hi"])
+
+
+@pytest.mark.asyncio
+async def test_chat_empty_choices_raises(respx_mock):
+    respx_mock.post("http://127.0.0.1:1234/v1/chat/completions").mock(
+        return_value=Response(200, json={"choices": []})
+    )
+    c = LMStudioClient(
+        base_url="http://127.0.0.1:1234/v1",
+        llm_model="x", embedding_model="y",
+    )
+    with pytest.raises(LMStudioUnavailable):
+        await c.chat("hello")
