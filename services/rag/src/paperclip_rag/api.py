@@ -116,4 +116,6 @@ def build_app(
     return app
 
 
-app = build_app()  # uvicorn entrypoint
+def create_app() -> FastAPI:
+    """uvicorn entrypoint. Use with `uvicorn paperclip_rag.api:create_app --factory`."""
+    return build_app()
