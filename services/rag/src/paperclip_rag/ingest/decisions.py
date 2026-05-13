@@ -32,6 +32,7 @@ _TEXT_FIELDS = (
     "summary",
     "body",
     "text",
+    "issues",
 )
 
 
@@ -41,6 +42,8 @@ def _row_to_text(obj: dict[str, Any]) -> str:
         v = obj.get(k)
         if isinstance(v, str) and v.strip():
             parts.append(f"{k}: {v.strip()}")
+        elif isinstance(v, list) and v and all(isinstance(x, str) for x in v):
+            parts.append(f"{k}: {', '.join(v)}")
     if not parts:
         parts.append(json.dumps(obj, ensure_ascii=False))
     return "\n".join(parts)
@@ -86,7 +89,11 @@ def main(argv: list[str] | None = None) -> int:
 
     rows = load_rows(args.jsonl)
     docs = [
-        {"id": _row_id(r), "text": _row_to_text(r), "metadata": {"source": "decisions.jsonl"}}
+        {
+            "id": _row_id(r),
+            "text": _row_to_text(r),
+            "metadata": {"source": "decisions.jsonl", "ts": r.get("ts")},
+        }
         for r in rows
     ]
     logger.info("loaded {} rows from {}", len(docs), args.jsonl)
