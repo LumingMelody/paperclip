@@ -40,6 +40,20 @@ def test_storage_root_expands_user(monkeypatch, tmp_path):
     assert s.storage_root.is_absolute()
 
 
+def test_storage_root_expands_tilde(monkeypatch):
+    monkeypatch.setenv("PAPERCLIP_RAG_STORAGE_ROOT", "~/paperclip-rag-test-dir")
+    s = Settings()
+    assert "~" not in str(s.storage_root)
+    assert str(s.storage_root).startswith(str(Path.home()))
+
+
+def test_relative_log_dir_anchored_to_repo_root():
+    # Default log_dir is "../../_logs/rag" → repo_root/_logs/rag
+    s = Settings()
+    assert s.log_dir.is_absolute()
+    assert s.log_dir.parts[-2:] == ("_logs", "rag")
+
+
 def test_collection_dir_creates(tmp_path, monkeypatch):
     monkeypatch.setenv("PAPERCLIP_RAG_STORAGE_ROOT", str(tmp_path))
     s = Settings()

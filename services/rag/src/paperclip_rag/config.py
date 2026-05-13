@@ -6,6 +6,9 @@ from pathlib import Path
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# services/rag/src/paperclip_rag/config.py → parents[4] is the paperclip repo root.
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -38,7 +41,9 @@ class Settings(BaseSettings):
     @classmethod
     def _expand_paths(cls, v: str | Path) -> Path:
         p = Path(v).expanduser()
-        return p.resolve() if p.exists() or p.parent.exists() else p
+        if not p.is_absolute():
+            p = _REPO_ROOT / p
+        return p.resolve()
 
     def collection_dir(self, name: str) -> Path:
         """Return (and create) the working_dir for a collection."""
