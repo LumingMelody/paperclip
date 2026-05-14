@@ -56,6 +56,8 @@ def build_app(
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):  # noqa: ARG001
+        from .logging_setup import configure_logging
+        configure_logging(settings.log_dir)
         logger.info("paperclip-rag starting on {}:{}", settings.host, settings.port)
         yield
         logger.info("paperclip-rag shutting down")
