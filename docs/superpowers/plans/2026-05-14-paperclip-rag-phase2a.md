@@ -461,10 +461,10 @@ DWS_DB_PORT=3306
 DWS_DB_USER=
 DWS_DB_PASSWORD=
 DWS_DB_DATABASE=
-PAPERCLIP_RAG_INGEST_ACCOUNT=
+PAPERCLIP_RAG_INGEST_ACCOUNT=EverPretty-US
 ```
 
-`PAPERCLIP_RAG_INGEST_ACCOUNT` is the Amazon seller account to filter by. Required.
+`PAPERCLIP_RAG_INGEST_ACCOUNT` is the Amazon seller account to filter by (default `EverPretty-US`).
 
 - [ ] **Step 2: Implement `src/paperclip_rag/ingest/refund_comments.py`**
 
@@ -1115,8 +1115,9 @@ Phase 2b plan (5k batch + tuning) will be written after Phase 2a's eval results 
 
 ---
 
-## Open Questions (resolve during execution)
+## Resolved Decisions
 
-- Which `--account` value to use? Phase 1 spec §12 didn't pin this. **Action:** ask user once before Task 4 dry-run.
-- Should ingest run in `--background` mode on the FastAPI side (returning a `job_id`) or stay synchronous? Phase 1 spec §5 says > 100 docs becomes a job. **Decision:** keep synchronous for Phase 2a (single operator, easy to ctrl-C). Convert to job_id in Phase 2c (5k overnight).
-- If `--since 90 days` returns fewer than 500 rows, expand window automatically or fail loudly? **Decision:** fail loudly — operator decides; auto-expansion can pull in stale data that distorts eval.
+- **Account:** `EverPretty-US` (set via `PAPERCLIP_RAG_INGEST_ACCOUNT=EverPretty-US` in `services/rag/.env`, or pass `--account EverPretty-US`).
+- **DB access:** user has SQL Server / DWS query access; `DWS_DB_*` env vars must be exported in the shell that runs the ingest CLI (same env used by `packages/tool-registry/src/tools/dws/_query.py`).
+- **Sync vs background ingest:** Phase 2a stays synchronous (single operator, easy ctrl-C). Convert to `/jobs/{job_id}` in Phase 2c (5k overnight).
+- **Short-row-count handling:** if `--since 90 days` returns < 500 rows, fail loudly. Operator decides whether to expand window; auto-expansion can pull stale data that distorts eval.
