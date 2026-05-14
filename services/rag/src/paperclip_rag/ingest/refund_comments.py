@@ -165,6 +165,8 @@ def main(argv: list[str] | None = None) -> int:
 
     docs = []
     skipped = 0
+    deduped = 0
+    seen_ids: set[str] = set()
     for r in rows:
         text = _row_to_text(r)
         sid = _row_id(r)
@@ -172,6 +174,13 @@ def main(argv: list[str] | None = None) -> int:
         if not args.force and manifest.seen(sid, sha):
             skipped += 1
             continue
+        # The r-to-d join (and repeat returns of the same order+sku) can yield
+        # rows sharing orderId::sellerSku. LightRAG rejects a batch with
+        # duplicate ids, so keep the first occurrence and drop the rest.
+        if sid in seen_ids:
+            deduped += 1
+            continue
+        seen_ids.add(sid)
         docs.append({
             "id": sid,
             "text": text,
@@ -186,7 +195,10 @@ def main(argv: list[str] | None = None) -> int:
             },
         })
 
-    logger.info("after manifest filter: {} new docs, {} skipped", len(docs), skipped)
+    logger.info(
+        "after filter: {} new docs, {} manifest-skipped, {} dup-id-deduped",
+        len(docs), skipped, deduped,
+    )
 
     if args.dry_run:
         for d in docs[:3]:
