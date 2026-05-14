@@ -200,7 +200,10 @@ def main(argv: list[str] | None = None) -> int:
 
     payload = {"collection": args.collection, "docs": docs, "upsert": True}
     logger.info("POSTing {} docs to {}/index", len(docs), args.api_base)
-    with httpx.Client(timeout=3600.0) as client:
+    # 500 docs * ~8s/chunk synchronous LightRAG ingest can exceed 1h; give a
+    # 4h ceiling so the CLI doesn't ReadTimeout before the server finishes
+    # (a premature timeout means the manifest never gets written).
+    with httpx.Client(timeout=14400.0) as client:
         r = client.post(f"{args.api_base}/index", json=payload)
     if r.status_code >= 300:
         logger.error("ingest failed: {} {}", r.status_code, r.text)
