@@ -58,6 +58,22 @@ def build_app(
     async def lifespan(app: FastAPI):  # noqa: ARG001
         from .logging_setup import configure_logging
         configure_logging(settings.log_dir)
+        # Startup dim probe: refuse to start if embedding dim != settings.embedding_dim.
+        # Soft-fail if LM Studio is unreachable (logs warning, lets dev workflows proceed).
+        try:
+            _probe_arr = await lm_client.embed(["probe"])
+            actual_dim = int(_probe_arr.shape[1])
+            if actual_dim != settings.embedding_dim:
+                raise RuntimeError(
+                    f"embedding dim mismatch: settings={settings.embedding_dim} "
+                    f"but probe returned {actual_dim} (model={settings.embedding_model})"
+                )
+            logger.info("embedding dim probe passed: {}", actual_dim)
+        except LMStudioUnavailable as e:
+            logger.warning(
+                "LM Studio unreachable at startup; skipping dim probe. /healthz will report. {}",
+                e,
+            )
         logger.info("paperclip-rag starting on {}:{}", settings.host, settings.port)
         yield
         logger.info("paperclip-rag shutting down")

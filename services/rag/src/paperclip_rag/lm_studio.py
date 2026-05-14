@@ -133,5 +133,10 @@ class LMStudioClient:
         except _TRANSPORT_ERRORS as e:
             raise LMStudioUnavailable(str(e)) from e
 
+    async def probe_embedding_dim(self) -> int:
+        """Return the dimensionality of a single-element embedding batch."""
+        arr = await self.embed(["probe"])
+        return int(arr.shape[1])
+
     async def aclose(self) -> None:
         await self._client.aclose()

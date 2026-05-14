@@ -1,5 +1,6 @@
 from unittest.mock import AsyncMock, MagicMock
 
+import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
@@ -33,6 +34,9 @@ def app_and_rag(monkeypatch, tmp_path):
     factory = _FakeFactory(rag)
     lm_client = MagicMock()
     lm_client.healthcheck = AsyncMock(return_value="up")
+    lm_client.embed = AsyncMock(
+        return_value=np.zeros((1, Settings().embedding_dim), dtype=np.float32)
+    )
     app = build_app(
         settings=Settings(),
         factory=factory,  # type: ignore[arg-type]
@@ -97,6 +101,7 @@ def test_healthz_503_when_lm_studio_down(monkeypatch, tmp_path):
     factory = _FakeFactory(rag)
     lm_client = MagicMock()
     lm_client.healthcheck = AsyncMock(side_effect=LMStudioUnavailable("boom"))
+    lm_client.embed = AsyncMock(side_effect=LMStudioUnavailable("boom"))
     app = build_app(
         settings=Settings(),
         factory=factory,  # type: ignore[arg-type]
