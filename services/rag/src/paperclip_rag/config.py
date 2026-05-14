@@ -34,8 +34,8 @@ class Settings(BaseSettings):
     host: str = "127.0.0.1"
     port: int = 9001
 
-    # Logging
-    log_dir: Path = Field(default=Path("../../_logs/rag"))
+    # Logging — relative paths anchor to repo root (see _expand_paths).
+    log_dir: Path = Field(default=Path("_logs/rag"))
 
     @field_validator("storage_root", "log_dir", mode="before")
     @classmethod

@@ -47,11 +47,17 @@ def test_storage_root_expands_tilde(monkeypatch):
     assert str(s.storage_root).startswith(str(Path.home()))
 
 
-def test_relative_log_dir_anchored_to_repo_root():
-    # Default log_dir is "../../_logs/rag" → repo_root/_logs/rag
+def test_relative_log_dir_anchored_to_repo_root(monkeypatch):
+    # Default log_dir is "_logs/rag" → repo_root/_logs/rag.
+    # conftest pins PAPERCLIP_RAG_LOG_DIR to tmp; drop it here to exercise the
+    # production default.
+    monkeypatch.delenv("PAPERCLIP_RAG_LOG_DIR", raising=False)
     s = Settings()
     assert s.log_dir.is_absolute()
     assert s.log_dir.parts[-2:] == ("_logs", "rag")
+    # Sanity: must be INSIDE repo root, not above it
+    from paperclip_rag.config import _REPO_ROOT
+    assert str(s.log_dir).startswith(str(_REPO_ROOT))
 
 
 def test_collection_dir_creates(tmp_path, monkeypatch):
