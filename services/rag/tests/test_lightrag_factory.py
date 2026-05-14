@@ -30,7 +30,11 @@ async def test_llm_closure_translates_history_messages_to_history(monkeypatch, t
         def __init__(self, **kwargs):
             captured.update(kwargs)
 
-    with patch("paperclip_rag.lightrag_factory.LightRAG", _FakeLightRAG):
+        async def initialize_storages(self):
+            return None
+
+    with patch("paperclip_rag.lightrag_factory.LightRAG", _FakeLightRAG), \
+         patch("lightrag.kg.shared_storage.initialize_pipeline_status", AsyncMock()):
         factory = LightRAGFactory(settings=settings, client=client)
         await factory.get("decisions")
 
@@ -60,7 +64,11 @@ async def test_embed_closure_forwards_texts(monkeypatch, tmp_path):
         def __init__(self, **kwargs):
             captured.update(kwargs)
 
-    with patch("paperclip_rag.lightrag_factory.LightRAG", _FakeLightRAG):
+        async def initialize_storages(self):
+            return None
+
+    with patch("paperclip_rag.lightrag_factory.LightRAG", _FakeLightRAG), \
+         patch("lightrag.kg.shared_storage.initialize_pipeline_status", AsyncMock()):
         factory = LightRAGFactory(settings=settings, client=client)
         await factory.get("decisions")
 
@@ -81,7 +89,11 @@ async def test_get_caches_and_isolates_collections(monkeypatch, tmp_path):
         def __init__(self, **_):
             pass
 
-    with patch("paperclip_rag.lightrag_factory.LightRAG", _FakeLightRAG):
+        async def initialize_storages(self):
+            return None
+
+    with patch("paperclip_rag.lightrag_factory.LightRAG", _FakeLightRAG), \
+         patch("lightrag.kg.shared_storage.initialize_pipeline_status", AsyncMock()):
         factory = LightRAGFactory(settings=settings, client=client)
         a1 = await factory.get("decisions")
         a2 = await factory.get("decisions")

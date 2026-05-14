@@ -89,6 +89,10 @@ class LightRAGFactory:
             chunk_overlap_token_size=self._settings.chunk_overlap,
             addon_params=dict(_E_COMMERCE_ADDON),
         )
+        # LightRAG >=1.3 requires async storage init before any insert/query.
+        await rag.initialize_storages()
+        from lightrag.kg.shared_storage import initialize_pipeline_status
+        await initialize_pipeline_status()
         return rag
 
 
