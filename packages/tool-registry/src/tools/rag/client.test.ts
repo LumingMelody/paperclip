@@ -13,13 +13,13 @@ describe("ragSearch", () => {
   });
 
   it("posts to /search at the default base and returns parsed JSON", async () => {
-    const fetchMock = vi.fn(async () =>
+    const fetchMock = vi.fn<typeof fetch>(async () =>
       new Response(JSON.stringify({ answer: "hi", meta: { translation: "translated" } }), {
         status: 200,
         headers: { "content-type": "application/json" },
       }),
     );
-    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    globalThis.fetch = fetchMock;
 
     const out = await ragSearch({ collection: "refund_comments", query: "做工", topK: 5 });
 
@@ -28,16 +28,16 @@ describe("ragSearch", () => {
 
     const [url, init] = fetchMock.mock.calls[0]!;
     expect(url).toBe("http://127.0.0.1:9001/search");
-    const body = JSON.parse((init as RequestInit).body as string);
+    const body = JSON.parse((init as unknown as RequestInit).body as string);
     expect(body).toEqual({ collection: "refund_comments", query: "做工", top_k: 5 });
   });
 
   it("honors RAG_API_BASE env override and strips trailing slashes", async () => {
     process.env.RAG_API_BASE = "http://rag.internal:8000/";
-    const fetchMock = vi.fn(async () =>
+    const fetchMock = vi.fn<typeof fetch>(async () =>
       new Response(JSON.stringify({ answer: "x" }), { status: 200 }),
     );
-    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    globalThis.fetch = fetchMock;
 
     await ragSearch({ collection: "c", query: "q" });
 
@@ -45,14 +45,14 @@ describe("ragSearch", () => {
   });
 
   it("defaults top_k to 10 when not provided", async () => {
-    const fetchMock = vi.fn(async () =>
+    const fetchMock = vi.fn<typeof fetch>(async () =>
       new Response(JSON.stringify({ answer: "x" }), { status: 200 }),
     );
-    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    globalThis.fetch = fetchMock;
 
     await ragSearch({ collection: "c", query: "q" });
 
-    const body = JSON.parse((fetchMock.mock.calls[0]![1] as RequestInit).body as string);
+    const body = JSON.parse((fetchMock.mock.calls[0]![1] as unknown as RequestInit).body as string);
     expect(body.top_k).toBe(10);
   });
 
