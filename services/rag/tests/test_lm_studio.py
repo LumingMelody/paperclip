@@ -118,3 +118,25 @@ async def test_chat_empty_choices_raises(respx_mock):
     )
     with pytest.raises(LMStudioUnavailable):
         await c.chat("hello")
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_chat_forwards_temperature_and_max_tokens():
+    route = respx.post("http://127.0.0.1:1234/v1/chat/completions").mock(
+        return_value=httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": "ok"}}]},
+        )
+    )
+    client = LMStudioClient(
+        base_url="http://127.0.0.1:1234/v1",
+        llm_model="qwen3-30b",
+        embedding_model="nomic-embed-text",
+    )
+    out = await client.chat("hi", temperature=0, max_tokens=42)
+    assert out == "ok"
+    body = route.calls.last.request.read().decode()
+    assert '"temperature":0' in body or '"temperature": 0' in body
+    assert '"max_tokens":42' in body or '"max_tokens": 42' in body
+    await client.aclose()

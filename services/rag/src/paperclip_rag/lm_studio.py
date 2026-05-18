@@ -103,6 +103,8 @@ class LMStudioClient:
         prompt: str,
         system_prompt: str | None,
         history: list[dict[str, Any]] | None,
+        temperature: float | None,
+        max_tokens: int | None,
     ) -> str:
         messages: list[dict[str, Any]] = []
         if system_prompt:
@@ -111,9 +113,19 @@ class LMStudioClient:
             messages.extend(history)
         messages.append({"role": "user", "content": prompt})
 
+        payload: dict[str, Any] = {
+            "model": self.llm_model,
+            "messages": messages,
+            "stream": False,
+        }
+        if temperature is not None:
+            payload["temperature"] = temperature
+        if max_tokens is not None:
+            payload["max_tokens"] = max_tokens
+
         r = await self._client.post(
             f"{self.base_url}/chat/completions",
-            json={"model": self.llm_model, "messages": messages, "stream": False},
+            json=payload,
         )
         r.raise_for_status()
         choices = r.json().get("choices", [])
@@ -126,10 +138,14 @@ class LMStudioClient:
         prompt: str,
         system_prompt: str | None = None,
         history: list[dict[str, Any]] | None = None,
-        **_: Any,
+        *,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
     ) -> str:
         try:
-            return await self._chat_once(prompt, system_prompt, history)
+            return await self._chat_once(
+                prompt, system_prompt, history, temperature, max_tokens
+            )
         except _TRANSPORT_ERRORS as e:
             raise LMStudioUnavailable(str(e)) from e
 
