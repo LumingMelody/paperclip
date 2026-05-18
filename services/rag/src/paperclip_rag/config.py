@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     # LM Studio
     lm_studio_base_url: str = "http://127.0.0.1:1234/v1"
     llm_model: str = "qwen3-30b-a3b-instruct-2507"
+    translation_llm_model: str | None = None  # falls back to llm_model when None
     embedding_model: str = "nomic-embed-text-v1.5"
     embedding_dim: int = 768
 

@@ -66,3 +66,17 @@ def test_collection_dir_creates(tmp_path, monkeypatch):
     target = s.collection_dir("decisions")
     assert target == (tmp_path / "decisions").resolve()
     assert target.exists() and target.is_dir()
+
+
+def test_translation_llm_model_defaults_to_none(monkeypatch):
+    monkeypatch.delenv("PAPERCLIP_RAG_TRANSLATION_LLM_MODEL", raising=False)
+    from paperclip_rag.config import Settings
+    s = Settings()
+    assert s.translation_llm_model is None
+
+
+def test_translation_llm_model_reads_env(monkeypatch):
+    monkeypatch.setenv("PAPERCLIP_RAG_TRANSLATION_LLM_MODEL", "qwen3-4b")
+    from paperclip_rag.config import Settings
+    s = Settings()
+    assert s.translation_llm_model == "qwen3-4b"
