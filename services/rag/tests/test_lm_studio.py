@@ -143,3 +143,43 @@ async def test_chat_forwards_temperature_and_max_tokens():
     assert body_obj["temperature"] == 0
     assert body_obj["max_tokens"] == 42
     await client.aclose()
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_chat_uses_model_override_in_payload():
+    route = respx.post("http://127.0.0.1:1234/v1/chat/completions").mock(
+        return_value=httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": "ok"}}]},
+        )
+    )
+    client = LMStudioClient(
+        base_url="http://127.0.0.1:1234/v1",
+        llm_model="qwen3-30b",
+        embedding_model="nomic-embed-text",
+    )
+    await client.chat("hi", model="qwen3-4b")
+    body_obj = json.loads(route.calls.last.request.read().decode())
+    assert body_obj["model"] == "qwen3-4b"
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_chat_uses_default_model_when_no_override():
+    route = respx.post("http://127.0.0.1:1234/v1/chat/completions").mock(
+        return_value=httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": "ok"}}]},
+        )
+    )
+    client = LMStudioClient(
+        base_url="http://127.0.0.1:1234/v1",
+        llm_model="qwen3-30b",
+        embedding_model="nomic-embed-text",
+    )
+    await client.chat("hi")
+    body_obj = json.loads(route.calls.last.request.read().decode())
+    assert body_obj["model"] == "qwen3-30b"
+    await client.aclose()

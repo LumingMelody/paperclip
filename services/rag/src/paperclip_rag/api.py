@@ -153,6 +153,14 @@ def build_app(
             tx.translate_ms,
             aquery_ms,
         )
+        if tx.status == "fallback":
+            logger.warning(
+                "search translation fallback collection={} query_len={} reason={} translate_ms={}",
+                req.collection,
+                len(req.query),
+                tx.fallback_reason,
+                tx.translate_ms,
+            )
         return SearchResponse(answer=str(answer), meta=meta)
 
     @app.exception_handler(Exception)

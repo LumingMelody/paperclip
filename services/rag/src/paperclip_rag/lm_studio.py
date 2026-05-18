@@ -105,6 +105,7 @@ class LMStudioClient:
         history: list[dict[str, Any]] | None,
         temperature: float | None,
         max_tokens: int | None,
+        model: str | None,
     ) -> str:
         messages: list[dict[str, Any]] = []
         if system_prompt:
@@ -114,7 +115,7 @@ class LMStudioClient:
         messages.append({"role": "user", "content": prompt})
 
         payload: dict[str, Any] = {
-            "model": self.llm_model,
+            "model": model if model is not None else self.llm_model,
             "messages": messages,
             "stream": False,
         }
@@ -141,11 +142,12 @@ class LMStudioClient:
         *,
         temperature: float | None = None,
         max_tokens: int | None = None,
+        model: str | None = None,
     ) -> str:
         try:
             return await self._chat_once(
                 prompt, system_prompt, history,
-                temperature=temperature, max_tokens=max_tokens,
+                temperature=temperature, max_tokens=max_tokens, model=model,
             )
         except _TRANSPORT_ERRORS as e:
             raise LMStudioUnavailable(str(e)) from e

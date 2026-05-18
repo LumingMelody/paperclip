@@ -52,15 +52,21 @@ async def test_translate_success_returns_english():
 
 
 @pytest.mark.asyncio
-async def test_translate_uses_translation_llm_model_when_provided():
+async def test_translate_forwards_llm_model_override():
     lm = MagicMock()
     lm.chat = AsyncMock(return_value="hi")
     lm.llm_model = "qwen3-30b"
     await translate_if_cjk("你好", lm_client=lm, llm_model="qwen3-4b")
-    # When llm_model override is passed, it's plumbed via the override path
-    # (current LMStudioClient binds model at construction; verify via the
-    # prompt being sent and that no model-binding side effect was attempted)
-    assert lm.chat.call_count == 1
+    assert lm.chat.call_args.kwargs["model"] == "qwen3-4b"
+
+
+@pytest.mark.asyncio
+async def test_translate_omits_model_when_no_override():
+    lm = MagicMock()
+    lm.chat = AsyncMock(return_value="hi")
+    lm.llm_model = "qwen3-30b"
+    await translate_if_cjk("你好", lm_client=lm)  # no llm_model
+    assert lm.chat.call_args.kwargs.get("model") is None
 
 
 import asyncio

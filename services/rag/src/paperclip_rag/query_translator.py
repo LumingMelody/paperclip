@@ -102,6 +102,7 @@ async def translate_if_cjk(
                 TRANSLATE_PROMPT.format(query=query),
                 temperature=0,
                 max_tokens=200,
+                model=llm_model,
             ),
             timeout=timeout_s,
         )
