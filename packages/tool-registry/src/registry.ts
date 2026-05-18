@@ -14,6 +14,7 @@ import { returnDetailDescriptor } from "./tools/dws/returnDetail.js";
 import { refundCommentsDescriptor } from "./tools/dws/refundComments.js";
 import { returnTrendDescriptor } from "./tools/dws/returnTrend.js";
 import { skusByReasonDescriptor } from "./tools/dws/skusByReason.js";
+import { searchRefundCommentsDescriptor } from "./tools/rag/searchRefundComments.js";
 import { currentInventoryDescriptor } from "./tools/fba/currentInventory.js";
 import { lowStockDescriptor } from "./tools/fba/lowStock.js";
 import { snapshotHistoryDescriptor } from "./tools/fba/snapshotHistory.js";
@@ -70,6 +71,7 @@ export const tools: ToolDescriptor[] = [
   registryListDescriptor,
   briefParseDescriptor,
   costsRollupDescriptor,
+  searchRefundCommentsDescriptor,
 ];
 
 export function registerTool(t: ToolDescriptor): void {
