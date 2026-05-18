@@ -128,3 +128,29 @@ async def translate_if_cjk(
         detect_ms=detect_ms,
         translate_ms=translate_ms,
     )
+
+
+async def resolve_query(
+    query: str,
+    *,
+    translate: Literal["auto", "off"],
+    lm_client: "LMStudioClient",
+    llm_model: str | None = None,
+    timeout_s: float = 5.0,
+) -> TranslationResult:
+    """Top-level entry used by /search and eval scripts.
+
+    `translate="off"` ALWAYS returns a passthrough result, even for CJK input.
+    `translate="auto"` defers to translate_if_cjk.
+    """
+    if translate == "off":
+        return TranslationResult(
+            text=query,
+            original=query,
+            status="passthrough",
+            detect_ms=0,
+            translate_ms=0,
+        )
+    return await translate_if_cjk(
+        query, lm_client=lm_client, llm_model=llm_model, timeout_s=timeout_s
+    )

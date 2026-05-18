@@ -129,3 +129,24 @@ async def test_translate_cjk_residue_falls_back():
     result = await translate_if_cjk("退货率", lm_client=lm)
     assert result.status == "fallback"
     assert result.fallback_reason == "output_check:cjk_residue"
+
+
+@pytest.mark.asyncio
+async def test_resolve_query_off_skips_translation():
+    from paperclip_rag.query_translator import resolve_query
+    lm = MagicMock()
+    lm.chat = AsyncMock()
+    result = await resolve_query("退货率", translate="off", lm_client=lm)
+    assert result.status == "passthrough"
+    assert result.text == "退货率"
+    assert lm.chat.call_count == 0
+
+
+@pytest.mark.asyncio
+async def test_resolve_query_auto_translates_cjk():
+    from paperclip_rag.query_translator import resolve_query
+    lm = MagicMock()
+    lm.chat = AsyncMock(return_value="return rate")
+    result = await resolve_query("退货率", translate="auto", lm_client=lm)
+    assert result.status == "translated"
+    assert result.text == "return rate"
