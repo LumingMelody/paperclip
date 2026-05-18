@@ -99,3 +99,33 @@ async def test_translate_model_unloaded_falls_back():
     assert result.status == "fallback"
     assert result.fallback_reason == "model_unloaded"
     assert result.text == "退货"
+
+
+@pytest.mark.asyncio
+async def test_translate_empty_output_falls_back():
+    lm = MagicMock()
+    lm.chat = AsyncMock(return_value="   ")
+    result = await translate_if_cjk("退货", lm_client=lm)
+    assert result.status == "fallback"
+    assert result.fallback_reason == "output_check:empty"
+    assert result.text == "退货"
+
+
+@pytest.mark.asyncio
+async def test_translate_length_anomaly_falls_back():
+    short_input = "退货"  # 2 chars
+    long_output = "x" * 200  # >10x
+    lm = MagicMock()
+    lm.chat = AsyncMock(return_value=long_output)
+    result = await translate_if_cjk(short_input, lm_client=lm)
+    assert result.status == "fallback"
+    assert result.fallback_reason == "output_check:length"
+
+
+@pytest.mark.asyncio
+async def test_translate_cjk_residue_falls_back():
+    lm = MagicMock()
+    lm.chat = AsyncMock(return_value="return rate 的")
+    result = await translate_if_cjk("退货率", lm_client=lm)
+    assert result.status == "fallback"
+    assert result.fallback_reason == "output_check:cjk_residue"

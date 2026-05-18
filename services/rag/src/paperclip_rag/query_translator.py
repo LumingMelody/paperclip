@@ -49,6 +49,19 @@ def _fallback(
     )
 
 
+def _fallback_with_ms(
+    query: str, detect_ms: int, translate_ms: int, reason: str
+) -> "TranslationResult":
+    return TranslationResult(
+        text=query,
+        original=query,
+        status="fallback",
+        detect_ms=detect_ms,
+        translate_ms=translate_ms,
+        fallback_reason=reason,
+    )
+
+
 TRANSLATE_PROMPT = """Translate the following Chinese e-commerce query to English.
 
 Rules:
@@ -99,8 +112,15 @@ async def translate_if_cjk(
     except ModelNotLoaded:
         return _fallback(query, detect_ms, t1, "model_unloaded")
     translate_ms = int((time.perf_counter() - t1) * 1000)
-
     translated = (translated_raw or "").strip()
+
+    if not translated:
+        return _fallback_with_ms(query, detect_ms, translate_ms, "output_check:empty")
+    if len(translated) > 10 * max(len(query), 1):
+        return _fallback_with_ms(query, detect_ms, translate_ms, "output_check:length")
+    if contains_cjk(translated):
+        return _fallback_with_ms(query, detect_ms, translate_ms, "output_check:cjk_residue")
+
     return TranslationResult(
         text=translated,
         original=query,
