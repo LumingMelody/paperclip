@@ -4,10 +4,13 @@ Soft, best-effort. Any failure falls back to the original query.
 """
 from __future__ import annotations
 
+import asyncio
 import re
 import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
+
+from .lm_studio import LMStudioUnavailable, ModelNotLoaded
 
 if TYPE_CHECKING:
     from .lm_studio import LMStudioClient
@@ -31,6 +34,19 @@ class TranslationResult:
     detect_ms: int
     translate_ms: int
     fallback_reason: str | None = None
+
+
+def _fallback(
+    query: str, detect_ms: int, t1: float, reason: str
+) -> "TranslationResult":
+    return TranslationResult(
+        text=query,
+        original=query,
+        status="fallback",
+        detect_ms=detect_ms,
+        translate_ms=int((time.perf_counter() - t1) * 1000),
+        fallback_reason=reason,
+    )
 
 
 TRANSLATE_PROMPT = """Translate the following Chinese e-commerce query to English.
@@ -68,16 +84,23 @@ async def translate_if_cjk(
 
     t1 = time.perf_counter()
     try:
-        translated = await lm_client.chat(
-            TRANSLATE_PROMPT.format(query=query),
-            temperature=0,
-            max_tokens=200,
+        translated_raw = await asyncio.wait_for(
+            lm_client.chat(
+                TRANSLATE_PROMPT.format(query=query),
+                temperature=0,
+                max_tokens=200,
+            ),
+            timeout=timeout_s,
         )
-    except Exception:  # broader catch in Task 7; refined there
-        raise
+    except asyncio.TimeoutError:
+        return _fallback(query, detect_ms, t1, "timeout")
+    except LMStudioUnavailable:
+        return _fallback(query, detect_ms, t1, "lm_down")
+    except ModelNotLoaded:
+        return _fallback(query, detect_ms, t1, "model_unloaded")
     translate_ms = int((time.perf_counter() - t1) * 1000)
 
-    translated = (translated or "").strip()
+    translated = (translated_raw or "").strip()
     return TranslationResult(
         text=translated,
         original=query,

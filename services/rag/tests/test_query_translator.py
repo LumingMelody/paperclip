@@ -61,3 +61,41 @@ async def test_translate_uses_translation_llm_model_when_provided():
     # (current LMStudioClient binds model at construction; verify via the
     # prompt being sent and that no model-binding side effect was attempted)
     assert lm.chat.call_count == 1
+
+
+import asyncio
+from paperclip_rag.lm_studio import LMStudioUnavailable, ModelNotLoaded
+
+
+@pytest.mark.asyncio
+async def test_translate_timeout_falls_back_to_original():
+    async def slow_chat(*a, **kw):
+        await asyncio.sleep(10)
+        return "should never see this"
+
+    lm = MagicMock()
+    lm.chat = AsyncMock(side_effect=slow_chat)
+    result = await translate_if_cjk("退货", lm_client=lm, timeout_s=0.05)
+    assert result.status == "fallback"
+    assert result.fallback_reason == "timeout"
+    assert result.text == "退货"
+
+
+@pytest.mark.asyncio
+async def test_translate_lm_unavailable_falls_back():
+    lm = MagicMock()
+    lm.chat = AsyncMock(side_effect=LMStudioUnavailable("conn refused"))
+    result = await translate_if_cjk("退货", lm_client=lm)
+    assert result.status == "fallback"
+    assert result.fallback_reason == "lm_down"
+    assert result.text == "退货"
+
+
+@pytest.mark.asyncio
+async def test_translate_model_unloaded_falls_back():
+    lm = MagicMock()
+    lm.chat = AsyncMock(side_effect=ModelNotLoaded("qwen3-30b not loaded"))
+    result = await translate_if_cjk("退货", lm_client=lm)
+    assert result.status == "fallback"
+    assert result.fallback_reason == "model_unloaded"
+    assert result.text == "退货"
