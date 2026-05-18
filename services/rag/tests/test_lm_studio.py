@@ -1,3 +1,5 @@
+import json
+
 import httpx
 import numpy as np
 import pytest
@@ -137,6 +139,7 @@ async def test_chat_forwards_temperature_and_max_tokens():
     out = await client.chat("hi", temperature=0, max_tokens=42)
     assert out == "ok"
     body = route.calls.last.request.read().decode()
-    assert '"temperature":0' in body or '"temperature": 0' in body
-    assert '"max_tokens":42' in body or '"max_tokens": 42' in body
+    body_obj = json.loads(body)
+    assert body_obj["temperature"] == 0
+    assert body_obj["max_tokens"] == 42
     await client.aclose()

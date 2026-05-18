@@ -144,7 +144,8 @@ class LMStudioClient:
     ) -> str:
         try:
             return await self._chat_once(
-                prompt, system_prompt, history, temperature, max_tokens
+                prompt, system_prompt, history,
+                temperature=temperature, max_tokens=max_tokens,
             )
         except _TRANSPORT_ERRORS as e:
             raise LMStudioUnavailable(str(e)) from e
