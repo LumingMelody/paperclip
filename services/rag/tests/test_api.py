@@ -93,6 +93,79 @@ def test_search_returns_answer(app_and_rag):
     rag.aquery.assert_awaited_once()
 
 
+def test_search_translates_cjk_query(app_and_rag, monkeypatch):
+    app, rag = app_and_rag
+    # Patch the translator used by api.py so we don't need a live LLM
+    from paperclip_rag import api as api_mod
+    from paperclip_rag.query_translator import TranslationResult
+
+    async def fake_resolve(query, *, translate, lm_client, llm_model=None, timeout_s=5.0):
+        assert translate == "auto"
+        return TranslationResult(
+            text="return rate",
+            original=query,
+            status="translated",
+            detect_ms=1,
+            translate_ms=42,
+        )
+
+    monkeypatch.setattr(api_mod, "resolve_query", fake_resolve)
+    client = TestClient(app)
+    r = client.post(
+        "/search",
+        json={"collection": "decisions", "query": "退货率"},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    # Verify the English string is what reached LightRAG
+    assert rag.aquery.await_args.args[0] == "return rate"
+    assert body["meta"]["translation"] == "translated"
+    assert body["meta"]["translated_query"] == "return rate"
+    assert body["meta"]["original_query"] == "退货率"
+    assert body["meta"]["translate_ms"] == 42
+
+
+def test_search_off_keeps_original_cn(app_and_rag, monkeypatch):
+    app, rag = app_and_rag
+    from paperclip_rag import api as api_mod
+    from paperclip_rag.query_translator import TranslationResult
+
+    async def fake_resolve(query, *, translate, lm_client, llm_model=None, timeout_s=5.0):
+        assert translate == "off"
+        return TranslationResult(
+            text=query, original=query, status="passthrough",
+            detect_ms=0, translate_ms=0,
+        )
+
+    monkeypatch.setattr(api_mod, "resolve_query", fake_resolve)
+    client = TestClient(app)
+    r = client.post(
+        "/search",
+        json={"collection": "decisions", "query": "退货率", "translate": "off"},
+    )
+    assert r.status_code == 200
+    assert rag.aquery.await_args.args[0] == "退货率"
+    assert r.json()["meta"]["translation"] == "passthrough"
+
+
+def test_search_meta_for_pure_english(app_and_rag, monkeypatch):
+    app, rag = app_and_rag
+    from paperclip_rag import api as api_mod
+    from paperclip_rag.query_translator import TranslationResult
+
+    async def fake_resolve(query, *, translate, lm_client, llm_model=None, timeout_s=5.0):
+        return TranslationResult(
+            text=query, original=query, status="passthrough",
+            detect_ms=0, translate_ms=0,
+        )
+
+    monkeypatch.setattr(api_mod, "resolve_query", fake_resolve)
+    client = TestClient(app)
+    r = client.post("/search", json={"collection": "decisions", "query": "return rate"})
+    assert r.status_code == 200
+    assert r.json()["meta"]["translation"] == "passthrough"
+
+
 def test_healthz_503_when_lm_studio_down(monkeypatch, tmp_path):
     from paperclip_rag.lm_studio import LMStudioUnavailable
 

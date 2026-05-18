@@ -12,6 +12,7 @@ from loguru import logger
 from .config import Settings, get_settings
 from .lightrag_factory import LightRAGFactory, query_param
 from .lm_studio import LMStudioClient, LMStudioUnavailable, ModelNotLoaded
+from .query_translator import TranslationResult, resolve_query
 from .schemas import (
     CollectionInfo,
     CollectionsResponse,
@@ -20,6 +21,7 @@ from .schemas import (
     HealthzResponse,
     IndexRequest,
     IndexResponse,
+    SearchMeta,
     SearchRequest,
     SearchResponse,
 )
@@ -119,12 +121,38 @@ def build_app(
     async def search(req: SearchRequest) -> SearchResponse:
         rag = await factory.get(req.collection)
         try:
-            answer = await rag.aquery(
-                req.query, param=query_param(req.mode.value, req.top_k)
+            tx: TranslationResult = await resolve_query(
+                req.query,
+                translate=req.translate,
+                lm_client=lm_client,
+                llm_model=settings.translation_llm_model,
             )
         except LMStudioUnavailable as e:
             raise HTTPException(503, {"error": {"code": "lm_studio_down", "message": str(e)}})
-        return SearchResponse(answer=str(answer))
+
+        try:
+            answer = await rag.aquery(
+                tx.text, param=query_param(req.mode.value, req.top_k)
+            )
+        except LMStudioUnavailable as e:
+            raise HTTPException(503, {"error": {"code": "lm_studio_down", "message": str(e)}})
+
+        meta = SearchMeta(
+            translation=tx.status,
+            original_query=tx.original if tx.status != "passthrough" else None,
+            translated_query=tx.text if tx.status == "translated" else None,
+            translate_ms=tx.translate_ms if tx.status != "passthrough" else None,
+            fallback_reason=tx.fallback_reason,
+        )
+        logger.info(
+            "search collection={} query_len={} cjk={} translation={} translate_ms={}",
+            req.collection,
+            len(req.query),
+            tx.status != "passthrough" or tx.translate_ms > 0,  # cjk approx
+            tx.status,
+            tx.translate_ms,
+        )
+        return SearchResponse(answer=str(answer), meta=meta)
 
     @app.exception_handler(Exception)
     async def _catch_all(req: Request, exc: Exception):  # noqa: ARG001
