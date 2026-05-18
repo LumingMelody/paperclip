@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -37,6 +37,7 @@ class SearchRequest(BaseModel):
     query: str = Field(min_length=1)
     mode: SearchMode = SearchMode.HYBRID
     top_k: int = Field(default=10, ge=1, le=100)
+    translate: Literal["auto", "off"] = "auto"
 
 
 class SearchChunk(BaseModel):
@@ -58,11 +59,20 @@ class KGRelation(BaseModel):
     description: str | None = None
 
 
+class SearchMeta(BaseModel):
+    translation: Literal["passthrough", "translated", "fallback"] | None = None
+    original_query: str | None = None
+    translated_query: str | None = None
+    translate_ms: int | None = None
+    fallback_reason: str | None = None
+
+
 class SearchResponse(BaseModel):
     answer: str
     chunks: list[SearchChunk] = Field(default_factory=list)
     entities: list[KGEntity] = Field(default_factory=list)
     relations: list[KGRelation] = Field(default_factory=list)
+    meta: SearchMeta | None = None
 
 
 class HealthzResponse(BaseModel):
