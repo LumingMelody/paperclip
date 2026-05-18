@@ -33,6 +33,19 @@ class TranslationResult:
     fallback_reason: str | None = None
 
 
+TRANSLATE_PROMPT = """Translate the following Chinese e-commerce query to English.
+
+Rules:
+- Output ONLY the English translation, no explanation, no quotes, no prefix.
+- Preserve proper nouns AS-IS (SKU codes like "Fifi", style codes like "07905", brand names).
+- Preserve numbers, dates, and ASIN/ISBN-like codes exactly.
+- Use e-commerce / apparel domain vocabulary (return, refund, size, color, fit, defect).
+- If input is already English, return it unchanged.
+
+Input: {query}
+Output:"""
+
+
 async def translate_if_cjk(
     query: str,
     lm_client: "LMStudioClient",
@@ -53,5 +66,22 @@ async def translate_if_cjk(
             translate_ms=0,
         )
 
-    # Translation paths added in later tasks.
-    raise NotImplementedError("translation path implemented in Task 6")
+    t1 = time.perf_counter()
+    try:
+        translated = await lm_client.chat(
+            TRANSLATE_PROMPT.format(query=query),
+            temperature=0,
+            max_tokens=200,
+        )
+    except Exception:  # broader catch in Task 7; refined there
+        raise
+    translate_ms = int((time.perf_counter() - t1) * 1000)
+
+    translated = (translated or "").strip()
+    return TranslationResult(
+        text=translated,
+        original=query,
+        status="translated",
+        detect_ms=detect_ms,
+        translate_ms=translate_ms,
+    )
