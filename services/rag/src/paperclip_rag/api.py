@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import inspect
+import time
 from contextlib import asynccontextmanager
 from typing import Any, Protocol
 
@@ -12,7 +13,7 @@ from loguru import logger
 from .config import Settings, get_settings
 from .lightrag_factory import LightRAGFactory, query_param
 from .lm_studio import LMStudioClient, LMStudioUnavailable, ModelNotLoaded
-from .query_translator import TranslationResult, resolve_query
+from .query_translator import TranslationResult, contains_cjk, resolve_query
 from .schemas import (
     CollectionInfo,
     CollectionsResponse,
@@ -120,20 +121,19 @@ def build_app(
     @app.post("/search", response_model=SearchResponse)
     async def search(req: SearchRequest) -> SearchResponse:
         rag = await factory.get(req.collection)
-        try:
-            tx: TranslationResult = await resolve_query(
-                req.query,
-                translate=req.translate,
-                lm_client=lm_client,
-                llm_model=settings.translation_llm_model,
-            )
-        except LMStudioUnavailable as e:
-            raise HTTPException(503, {"error": {"code": "lm_studio_down", "message": str(e)}})
+        tx: TranslationResult = await resolve_query(
+            req.query,
+            translate=req.translate,
+            lm_client=lm_client,
+            llm_model=settings.translation_llm_model,
+        )
 
         try:
+            t_query = time.perf_counter()
             answer = await rag.aquery(
                 tx.text, param=query_param(req.mode.value, req.top_k)
             )
+            aquery_ms = int((time.perf_counter() - t_query) * 1000)
         except LMStudioUnavailable as e:
             raise HTTPException(503, {"error": {"code": "lm_studio_down", "message": str(e)}})
 
@@ -145,12 +145,13 @@ def build_app(
             fallback_reason=tx.fallback_reason,
         )
         logger.info(
-            "search collection={} query_len={} cjk={} translation={} translate_ms={}",
+            "search collection={} query_len={} cjk={} translation={} translate_ms={} aquery_ms={}",
             req.collection,
             len(req.query),
-            tx.status != "passthrough" or tx.translate_ms > 0,  # cjk approx
+            str(contains_cjk(req.query)).lower(),
             tx.status,
             tx.translate_ms,
+            aquery_ms,
         )
         return SearchResponse(answer=str(answer), meta=meta)
 

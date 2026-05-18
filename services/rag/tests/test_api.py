@@ -184,3 +184,36 @@ def test_healthz_503_when_lm_studio_down(monkeypatch, tmp_path):
         r = c.get("/healthz")
     assert r.status_code == 503
     assert r.json()["error"]["code"] == "lm_studio_down"
+
+
+def test_search_meta_for_fallback(app_and_rag, monkeypatch):
+    app, rag = app_and_rag
+    from paperclip_rag import api as api_mod
+    from paperclip_rag.query_translator import TranslationResult
+
+    async def fake_resolve(query, *, translate, lm_client, llm_model=None, timeout_s=5.0):
+        return TranslationResult(
+            text=query,
+            original=query,
+            status="fallback",
+            detect_ms=1,
+            translate_ms=850,
+            fallback_reason="lm_down",
+        )
+
+    monkeypatch.setattr(api_mod, "resolve_query", fake_resolve)
+    client = TestClient(app)
+    r = client.post(
+        "/search",
+        json={"collection": "decisions", "query": "退货率"},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    # Fallback uses ORIGINAL query (Chinese) for rag.aquery
+    assert rag.aquery.await_args.args[0] == "退货率"
+    meta = body["meta"]
+    assert meta["translation"] == "fallback"
+    assert meta["original_query"] == "退货率"
+    assert meta["translated_query"] is None
+    assert meta["translate_ms"] == 850
+    assert meta["fallback_reason"] == "lm_down"
