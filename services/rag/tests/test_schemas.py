@@ -47,9 +47,9 @@ def test_search_top_k_bounds():
         SearchRequest(collection="x", query="q", top_k=101)
 
 
-def test_search_request_translate_default_auto():
+def test_search_request_translate_default_off():
     req = SearchRequest(collection="x", query="hi")
-    assert req.translate == "auto"
+    assert req.translate == "off"
 
 
 def test_search_request_translate_off():

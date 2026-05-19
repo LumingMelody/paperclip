@@ -75,7 +75,7 @@ export const searchRefundCommentsDescriptor: ToolDescriptor<
     "customer-comment evidence. " +
     "USE FOR: open-ended 'why are customers complaining' / 'what's the real " +
     "issue behind this return-reason code' / 'main complaints for SKU X' " +
-    "semantic questions. CN and EN queries both work (CN is auto-translated). " +
+    "semantic questions. CN and EN queries both work natively via the multilingual bge-m3 embedding (no translation step). " +
     "DO NOT USE FOR: structured filtering (specific orderId, exact SKU+date " +
     "lookups, quantity thresholds) — use dws.refundComments instead. " +
     "ON ERROR: any error class (typically 'UpstreamError' when the RAG " +

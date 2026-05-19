@@ -130,7 +130,7 @@ def test_search_translates_cjk_query(app_and_rag, monkeypatch):
     client = TestClient(app)
     r = client.post(
         "/search",
-        json={"collection": "decisions", "query": "退货率"},
+        json={"collection": "decisions", "query": "退货率", "translate": "auto"},
     )
     assert r.status_code == 200
     body = r.json()
@@ -222,7 +222,7 @@ def test_search_meta_for_fallback(app_and_rag, monkeypatch):
     client = TestClient(app)
     r = client.post(
         "/search",
-        json={"collection": "decisions", "query": "退货率"},
+        json={"collection": "decisions", "query": "退货率", "translate": "auto"},
     )
     assert r.status_code == 200
     body = r.json()
