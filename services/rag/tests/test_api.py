@@ -12,7 +12,18 @@ class _FakeRAG:
     """Stand-in for a LightRAG instance."""
     def __init__(self):
         self.ainsert = AsyncMock(return_value=None)
-        self.aquery = AsyncMock(return_value="canned answer")
+        self.aquery_llm = AsyncMock(return_value={
+            "status": "success",
+            "message": "Query executed successfully",
+            "data": {
+                "entities": [],
+                "relationships": [],
+                "chunks": [],
+                "references": [],
+            },
+            "metadata": {},
+            "llm_response": {"content": "canned answer", "is_streaming": False},
+        })
 
 
 class _FakeFactory:
@@ -90,7 +101,7 @@ def test_search_returns_answer(app_and_rag):
     assert r.status_code == 200
     body = r.json()
     assert body["answer"] == "canned answer"
-    rag.aquery.assert_awaited_once()
+    rag.aquery_llm.assert_awaited_once()
 
 
 def test_search_translates_cjk_query(app_and_rag, monkeypatch):
@@ -118,7 +129,7 @@ def test_search_translates_cjk_query(app_and_rag, monkeypatch):
     assert r.status_code == 200
     body = r.json()
     # Verify the English string is what reached LightRAG
-    assert rag.aquery.await_args.args[0] == "return rate"
+    assert rag.aquery_llm.await_args.args[0] == "return rate"
     assert body["meta"]["translation"] == "translated"
     assert body["meta"]["translated_query"] == "return rate"
     assert body["meta"]["original_query"] == "退货率"
@@ -144,7 +155,7 @@ def test_search_off_keeps_original_cn(app_and_rag, monkeypatch):
         json={"collection": "decisions", "query": "退货率", "translate": "off"},
     )
     assert r.status_code == 200
-    assert rag.aquery.await_args.args[0] == "退货率"
+    assert rag.aquery_llm.await_args.args[0] == "退货率"
     assert r.json()["meta"]["translation"] == "passthrough"
 
 
@@ -209,11 +220,156 @@ def test_search_meta_for_fallback(app_and_rag, monkeypatch):
     )
     assert r.status_code == 200
     body = r.json()
-    # Fallback uses ORIGINAL query (Chinese) for rag.aquery
-    assert rag.aquery.await_args.args[0] == "退货率"
+    # Fallback uses ORIGINAL query (Chinese) for rag.aquery_llm
+    assert rag.aquery_llm.await_args.args[0] == "退货率"
     meta = body["meta"]
     assert meta["translation"] == "fallback"
     assert meta["original_query"] == "退货率"
     assert meta["translated_query"] is None
     assert meta["translate_ms"] == 850
     assert meta["fallback_reason"] == "lm_down"
+
+
+def test_search_returns_chunks_when_lightrag_provides_them(app_and_rag, monkeypatch):
+    app, rag = app_and_rag
+    from paperclip_rag import api as api_mod
+    from paperclip_rag.query_translator import TranslationResult
+
+    async def fake_resolve(query, *, translate, lm_client, llm_model=None, timeout_s=5.0):
+        return TranslationResult(
+            text=query, original=query, status="passthrough",
+            detect_ms=0, translate_ms=0,
+        )
+
+    monkeypatch.setattr(api_mod, "resolve_query", fake_resolve)
+    rag.aquery_llm = AsyncMock(return_value={
+        "status": "success",
+        "data": {
+            "chunks": [
+                {"chunk_id": "c1", "content": "Too small, chest tight",
+                 "file_path": "refund_comments/EE02968.json", "reference_id": "ref-1"},
+                {"chunk_id": "c2", "content": "Fabric too thin",
+                 "file_path": "refund_comments/EE02968.json", "reference_id": "ref-2"},
+                {"chunk_id": "c3", "content": "Color faded after wash",
+                 "file_path": "refund_comments/EE02968.json", "reference_id": "ref-3"},
+            ],
+            "entities": [], "relationships": [], "references": [],
+        },
+        "llm_response": {"content": "x", "is_streaming": False},
+    })
+    client = TestClient(app)
+    r = client.post("/search", json={"collection": "decisions", "query": "EE02968 complaints"})
+    assert r.status_code == 200
+    body = r.json()
+    assert len(body["chunks"]) == 3
+    assert body["chunks"][0]["id"] == "c1"
+    assert body["chunks"][0]["text"] == "Too small, chest tight"
+    assert body["chunks"][0]["file_path"] == "refund_comments/EE02968.json"
+    assert body["chunks"][0]["reference_id"] == "ref-1"
+
+
+def test_search_returns_entities_and_relations(app_and_rag, monkeypatch):
+    app, rag = app_and_rag
+    from paperclip_rag import api as api_mod
+    from paperclip_rag.query_translator import TranslationResult
+
+    async def fake_resolve(query, *, translate, lm_client, llm_model=None, timeout_s=5.0):
+        return TranslationResult(
+            text=query, original=query, status="passthrough",
+            detect_ms=0, translate_ms=0,
+        )
+
+    monkeypatch.setattr(api_mod, "resolve_query", fake_resolve)
+    rag.aquery_llm = AsyncMock(return_value={
+        "status": "success",
+        "data": {
+            "chunks": [],
+            "entities": [
+                {"entity_name": "EE02968", "entity_type": "SKU",
+                 "description": "style code", "source_id": "c1",
+                 "file_path": "x", "reference_id": "ref-1"},
+            ],
+            "relationships": [
+                {"src_id": "EE02968", "tgt_id": "APPAREL_TOO_SMALL",
+                 "description": "returns due to size", "keywords": "size,fit",
+                 "weight": 0.85, "source_id": "c1",
+                 "file_path": "x", "reference_id": "ref-1"},
+            ],
+            "references": [],
+        },
+        "llm_response": {"content": "x", "is_streaming": False},
+    })
+    client = TestClient(app)
+    r = client.post("/search", json={"collection": "decisions", "query": "EE02968"})
+    body = r.json()
+    assert len(body["entities"]) == 1
+    assert body["entities"][0]["name"] == "EE02968"
+    assert body["entities"][0]["type"] == "SKU"
+    assert body["entities"][0]["source_id"] == "c1"
+    assert len(body["relations"]) == 1
+    assert body["relations"][0]["src"] == "EE02968"
+    assert body["relations"][0]["tgt"] == "APPAREL_TOO_SMALL"
+    assert body["relations"][0]["weight"] == 0.85
+    assert body["relations"][0]["keywords"] == "size,fit"
+
+
+def test_search_returns_references(app_and_rag, monkeypatch):
+    app, rag = app_and_rag
+    from paperclip_rag import api as api_mod
+    from paperclip_rag.query_translator import TranslationResult
+
+    async def fake_resolve(query, *, translate, lm_client, llm_model=None, timeout_s=5.0):
+        return TranslationResult(
+            text=query, original=query, status="passthrough",
+            detect_ms=0, translate_ms=0,
+        )
+
+    monkeypatch.setattr(api_mod, "resolve_query", fake_resolve)
+    rag.aquery_llm = AsyncMock(return_value={
+        "status": "success",
+        "data": {
+            "chunks": [], "entities": [], "relationships": [],
+            "references": [
+                {"reference_id": "ref-1", "file_path": "refund_comments/EE02968.json"},
+                {"reference_id": "ref-2", "file_path": "refund_comments/EG01923.json"},
+            ],
+        },
+        "llm_response": {"content": "x", "is_streaming": False},
+    })
+    client = TestClient(app)
+    r = client.post("/search", json={"collection": "decisions", "query": "x"})
+    body = r.json()
+    assert len(body["references"]) == 2
+    assert body["references"][0]["reference_id"] == "ref-1"
+    assert body["references"][1]["file_path"] == "refund_comments/EG01923.json"
+
+
+def test_search_handles_failure_status_with_empty_data(app_and_rag, monkeypatch):
+    """LightRAG returns {status:'failure', ...} → handler must NOT crash;
+    answer carries the failure message; all data fields empty."""
+    app, rag = app_and_rag
+    from paperclip_rag import api as api_mod
+    from paperclip_rag.query_translator import TranslationResult
+
+    async def fake_resolve(query, *, translate, lm_client, llm_model=None, timeout_s=5.0):
+        return TranslationResult(
+            text=query, original=query, status="passthrough",
+            detect_ms=0, translate_ms=0,
+        )
+
+    monkeypatch.setattr(api_mod, "resolve_query", fake_resolve)
+    rag.aquery_llm = AsyncMock(return_value={
+        "status": "failure",
+        "message": "KG corrupted",
+        "data": {},
+        "llm_response": {"content": None, "is_streaming": False},
+    })
+    client = TestClient(app)
+    r = client.post("/search", json={"collection": "decisions", "query": "x"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["answer"] == "KG corrupted"
+    assert body["chunks"] == []
+    assert body["entities"] == []
+    assert body["relations"] == []
+    assert body["references"] == []
