@@ -44,6 +44,8 @@ class SearchChunk(BaseModel):
     id: str
     text: str
     score: float | None = None
+    file_path: str | None = None
+    reference_id: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -51,12 +53,25 @@ class KGEntity(BaseModel):
     name: str
     type: str | None = None
     description: str | None = None
+    source_id: str | None = None
+    file_path: str | None = None
+    reference_id: str | None = None
 
 
 class KGRelation(BaseModel):
     src: str
     tgt: str
     description: str | None = None
+    keywords: str | None = None
+    weight: float | None = None
+    source_id: str | None = None
+    file_path: str | None = None
+    reference_id: str | None = None
+
+
+class SearchReference(BaseModel):
+    reference_id: str
+    file_path: str
 
 
 class SearchMeta(BaseModel):
@@ -72,6 +87,7 @@ class SearchResponse(BaseModel):
     chunks: list[SearchChunk] = Field(default_factory=list)
     entities: list[KGEntity] = Field(default_factory=list)
     relations: list[KGRelation] = Field(default_factory=list)
+    references: list[SearchReference] = Field(default_factory=list)
     meta: SearchMeta | None = None
 
 
