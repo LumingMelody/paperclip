@@ -22,7 +22,11 @@ from .schemas import (
     HealthzResponse,
     IndexRequest,
     IndexResponse,
+    KGEntity,
+    KGRelation,
+    SearchChunk,
     SearchMeta,
+    SearchReference,
     SearchRequest,
     SearchResponse,
 )
@@ -130,12 +134,15 @@ def build_app(
 
         try:
             t_query = time.perf_counter()
-            answer = await rag.aquery(
+            result = await rag.aquery_llm(
                 tx.text, param=query_param(req.mode.value, req.top_k)
             )
             aquery_ms = int((time.perf_counter() - t_query) * 1000)
         except LMStudioUnavailable as e:
             raise HTTPException(503, {"error": {"code": "lm_studio_down", "message": str(e)}})
+
+        answer = _extract_answer(result)
+        data = result.get("data") or {}
 
         meta = SearchMeta(
             translation=tx.status,
@@ -161,7 +168,14 @@ def build_app(
                 tx.fallback_reason,
                 tx.translate_ms,
             )
-        return SearchResponse(answer=str(answer), meta=meta)
+        return SearchResponse(
+            answer=answer,
+            chunks=[_to_chunk(c) for c in data.get("chunks") or []],
+            entities=[_to_entity(e) for e in data.get("entities") or []],
+            relations=[_to_relation(r) for r in data.get("relationships") or []],
+            references=[_to_reference(r) for r in data.get("references") or []],
+            meta=meta,
+        )
 
     @app.exception_handler(Exception)
     async def _catch_all(req: Request, exc: Exception):  # noqa: ARG001
@@ -174,3 +188,59 @@ def build_app(
 def create_app() -> FastAPI:
     """uvicorn entrypoint. Use with `uvicorn paperclip_rag.api:create_app --factory`."""
     return build_app()
+
+
+def _extract_answer(result: dict[str, Any]) -> str:
+    """Pull the text answer out of aquery_llm's polymorphic return shape.
+
+    Handles: success+non-streaming (the common case), failure (surfaces
+    `message`), and streaming (surfaces a sentinel — our QueryParam
+    defaults to stream=False so this should not fire in practice).
+    """
+    if result.get("status") == "failure":
+        return str(result.get("message") or "")
+    llm_response = result.get("llm_response") or {}
+    if llm_response.get("is_streaming"):
+        logger.warning("aquery_llm returned streaming response; ignored")
+        return "[streaming response not collected]"
+    return str(llm_response.get("content") or "")
+
+
+def _to_chunk(c: dict[str, Any]) -> SearchChunk:
+    return SearchChunk(
+        id=str(c.get("chunk_id") or c.get("id") or ""),
+        text=str(c.get("content") or ""),
+        file_path=c.get("file_path"),
+        reference_id=c.get("reference_id"),
+    )
+
+
+def _to_entity(e: dict[str, Any]) -> KGEntity:
+    return KGEntity(
+        name=str(e.get("entity_name") or ""),
+        type=e.get("entity_type"),
+        description=e.get("description"),
+        source_id=e.get("source_id"),
+        file_path=e.get("file_path"),
+        reference_id=e.get("reference_id"),
+    )
+
+
+def _to_relation(r: dict[str, Any]) -> KGRelation:
+    return KGRelation(
+        src=str(r.get("src_id") or ""),
+        tgt=str(r.get("tgt_id") or ""),
+        description=r.get("description"),
+        keywords=r.get("keywords"),
+        weight=r.get("weight"),
+        source_id=r.get("source_id"),
+        file_path=r.get("file_path"),
+        reference_id=r.get("reference_id"),
+    )
+
+
+def _to_reference(r: dict[str, Any]) -> SearchReference:
+    return SearchReference(
+        reference_id=str(r.get("reference_id") or ""),
+        file_path=str(r.get("file_path") or ""),
+    )
