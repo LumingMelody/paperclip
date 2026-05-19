@@ -102,6 +102,12 @@ def test_search_returns_answer(app_and_rag):
     body = r.json()
     assert body["answer"] == "canned answer"
     rag.aquery_llm.assert_awaited_once()
+    # A2: verify the handler passes our custom system_prompt to suppress the
+    # References hallucination. The positive-framing marker is unique to our
+    # override.
+    call_kwargs = rag.aquery_llm.await_args.kwargs
+    assert call_kwargs.get("system_prompt") is not None
+    assert "只输出答案正文" in call_kwargs["system_prompt"]
 
 
 def test_search_translates_cjk_query(app_and_rag, monkeypatch):

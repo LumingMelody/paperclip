@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 from loguru import logger
 
 from .config import Settings, get_settings
-from .lightrag_factory import LightRAGFactory, query_param
+from .lightrag_factory import LightRAGFactory, query_param, system_prompt_for
 from .lm_studio import LMStudioClient, LMStudioUnavailable, ModelNotLoaded
 from .query_translator import TranslationResult, contains_cjk, resolve_query
 from .schemas import (
@@ -135,7 +135,9 @@ def build_app(
         try:
             t_query = time.perf_counter()
             result = await rag.aquery_llm(
-                tx.text, param=query_param(req.mode.value, req.top_k)
+                tx.text,
+                param=query_param(req.mode.value, req.top_k),
+                system_prompt=system_prompt_for(req.mode.value),
             )
             aquery_ms = int((time.perf_counter() - t_query) * 1000)
         except LMStudioUnavailable as e:
