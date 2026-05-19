@@ -16,8 +16,8 @@ def test_defaults(monkeypatch):
     s = Settings()
     assert s.lm_studio_base_url == "http://127.0.0.1:1234/v1"
     assert s.llm_model == "qwen3-30b-a3b-instruct-2507"
-    assert s.embedding_model == "nomic-embed-text-v1.5"
-    assert s.embedding_dim == 768
+    assert s.embedding_model == "text-embedding-bge-m3"
+    assert s.embedding_dim == 1024
     assert s.chunk_token_size == 800
     assert s.chunk_overlap == 100
     assert s.llm_max_async == 16

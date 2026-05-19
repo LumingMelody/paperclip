@@ -18,13 +18,13 @@ def factory_mock():
 
 def test_dim_probe_rejects_mismatch(monkeypatch, tmp_path, factory_mock):
     monkeypatch.setenv("PAPERCLIP_RAG_STORAGE_ROOT", str(tmp_path))
-    monkeypatch.setenv("PAPERCLIP_RAG_EMBEDDING_DIM", "768")
+    monkeypatch.setenv("PAPERCLIP_RAG_EMBEDDING_DIM", "1024")
     settings = Settings()
 
     lm_client = MagicMock()
     lm_client.healthcheck = AsyncMock(return_value="up")
-    # Probe returns 1024-dim vec, settings says 768 → must error
-    lm_client.embed = AsyncMock(return_value=np.zeros((1, 1024), dtype=np.float32))
+    # Probe returns 768-dim vec, settings says 1024 → must error
+    lm_client.embed = AsyncMock(return_value=np.zeros((1, 768), dtype=np.float32))
 
     app = build_app(settings=settings, factory=factory_mock, lm_client=lm_client)
     with pytest.raises(RuntimeError, match="embedding dim mismatch"):
@@ -34,12 +34,12 @@ def test_dim_probe_rejects_mismatch(monkeypatch, tmp_path, factory_mock):
 
 def test_dim_probe_passes_match(monkeypatch, tmp_path, factory_mock):
     monkeypatch.setenv("PAPERCLIP_RAG_STORAGE_ROOT", str(tmp_path))
-    monkeypatch.setenv("PAPERCLIP_RAG_EMBEDDING_DIM", "768")
+    monkeypatch.setenv("PAPERCLIP_RAG_EMBEDDING_DIM", "1024")
     settings = Settings()
 
     lm_client = MagicMock()
     lm_client.healthcheck = AsyncMock(return_value="up")
-    lm_client.embed = AsyncMock(return_value=np.zeros((1, 768), dtype=np.float32))
+    lm_client.embed = AsyncMock(return_value=np.zeros((1, 1024), dtype=np.float32))
 
     app = build_app(settings=settings, factory=factory_mock, lm_client=lm_client)
     with TestClient(app) as c:
