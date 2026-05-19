@@ -164,6 +164,7 @@ class LightRAGFactory:
             chunk_token_size=self._settings.chunk_token_size,
             chunk_overlap_token_size=self._settings.chunk_overlap,
             addon_params=dict(_E_COMMERCE_ADDON),
+            enable_llm_cache=False,
         )
         # LightRAG >=1.3 requires async storage init before any insert/query.
         await rag.initialize_storages()
