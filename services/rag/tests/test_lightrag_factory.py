@@ -102,3 +102,67 @@ async def test_get_caches_and_isolates_collections(monkeypatch, tmp_path):
     assert a1 is a2
     assert a1 is not b
     assert factory.cached_collections() == ["decisions", "refund_comments"]
+
+
+def test_kg_prompt_formats_with_context_data():
+    """KG mode placeholder must be `{context_data}` to match operate.py:3270."""
+    from paperclip_rag.lightrag_factory import RAG_RESPONSE_PROMPT_KG
+    formatted = RAG_RESPONSE_PROMPT_KG.format(
+        response_type="multiple paragraphs",
+        user_prompt="n/a",
+        context_data="(test KG context)",
+    )
+    assert "(test KG context)" in formatted
+    assert "multiple paragraphs" in formatted
+
+
+def test_naive_prompt_formats_with_content_data():
+    """Naive mode placeholder must be `{content_data}` (sic — LightRAG typo)
+    to match operate.py:4123 and prompt.py:329."""
+    from paperclip_rag.lightrag_factory import RAG_RESPONSE_PROMPT_NAIVE
+    formatted = RAG_RESPONSE_PROMPT_NAIVE.format(
+        response_type="multiple paragraphs",
+        user_prompt="n/a",
+        content_data="(test naive context)",
+    )
+    assert "(test naive context)" in formatted
+
+
+def test_kg_prompt_keyerrors_on_naive_call_shape():
+    """Negative test: prove the KG prompt cannot be safely used for naive mode.
+    Documents why we need TWO prompts."""
+    import pytest
+    from paperclip_rag.lightrag_factory import RAG_RESPONSE_PROMPT_KG
+    with pytest.raises(KeyError):
+        RAG_RESPONSE_PROMPT_KG.format(
+            response_type="x", user_prompt="x", content_data="x",  # wrong key
+        )
+
+
+def test_prompts_do_not_contain_stock_placeholder_titles():
+    """A2 raison d'être: the override must NOT carry through LightRAG's literal
+    example block ('Document Title One/Two/Three')."""
+    from paperclip_rag.lightrag_factory import (
+        RAG_RESPONSE_PROMPT_KG,
+        RAG_RESPONSE_PROMPT_NAIVE,
+    )
+    for p in (RAG_RESPONSE_PROMPT_KG, RAG_RESPONSE_PROMPT_NAIVE):
+        assert "Document Title One" not in p
+        assert "Document Title Two" not in p
+        assert "Document Title Three" not in p
+        # Positive-framing line present:
+        assert "只输出答案正文" in p
+        assert "回答在最后一句结束" in p
+
+
+def test_system_prompt_for_picks_naive_for_naive_mode():
+    from paperclip_rag.lightrag_factory import (
+        RAG_RESPONSE_PROMPT_KG,
+        RAG_RESPONSE_PROMPT_NAIVE,
+        system_prompt_for,
+    )
+    assert system_prompt_for("naive") is RAG_RESPONSE_PROMPT_NAIVE
+    for kg_mode in ("local", "global", "hybrid", "mix"):
+        assert system_prompt_for(kg_mode) is RAG_RESPONSE_PROMPT_KG
+    # Bypass falls through to KG (placeholder never gets format()'d in bypass path)
+    assert system_prompt_for("bypass") is RAG_RESPONSE_PROMPT_KG
