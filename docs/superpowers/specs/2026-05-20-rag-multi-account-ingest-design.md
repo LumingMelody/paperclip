@@ -40,23 +40,19 @@ B2 一箭双雕：把 ingest 扩到 EP 全市场，并在 ingest 时正确落地
 | B1 `shop` 参数 | **改为可选** | 传 shop → 单市场范围提示；不传 → 跨市场查全部。机器人按问题自行决定。 |
 | references 产物 | **机器人回答附来源列表** | A2 的 References 抑制针对的是 LLM 幻觉的*假*来源；B2 落地 file_path 后是*真*来源，反转合理。 |
 
-## 4. 账号映射（已验证）
+## 4. 账号映射（已确认）
 
-`packages/tool-registry/src/tools/dws/client.ts::shopToAccount` 已确立映射：
+RAG ingest 侧 `refund_comments.py` 的 `--account` 参数对应 `dm_allretrun_analysis_d.Account` 列，实际取值为 **`EverPretty-{COUNTRY}`** 风格（C1 ingest 实跑确认，如 `EverPretty-US`、`EverPretty-UK`）。
 
-```
-shop  EP-XX  ⇄  DWS Account  AmazonEPXX
-```
-
-例：`EP-UK` ⇄ `AmazonEPUK`。`SHOP_RE = /^(EP|PZ|DAMA)-[A-Z]{2}$/`。
+> 注意：`client.ts::shopToAccount` 产出的 `AmazonEP{XX}` 是**另一套**——给 dws `_query.py` 的退货率机器人工具用的。B2 不碰 `client.ts`：B1 RAG 工具用共享 collection `refund_comments`，`shop` 仅作查询提示，不做 account 翻译。
 
 ingest 编排脚本**不硬编码市场列表**，运行时从 DB 发现：
 
 ```sql
-SELECT DISTINCT Account FROM dm_allretrun_analysis_d WHERE Account LIKE 'AmazonEP%'
+SELECT DISTINCT Account FROM dm_allretrun_analysis_d WHERE Account LIKE 'EverPretty-%'
 ```
 
-逆映射 `AmazonEPUK → EP-UK`：剥掉 `Amazon` 前缀，在 `EP` 与两位国家码间插 `-`。
+account → shop 逆映射：`EverPretty-UK → EP-UK`（剥掉 `EverPretty-` 前缀，前置 `EP-`）。
 
 ## 5. 设计
 
@@ -68,8 +64,9 @@ SELECT DISTINCT Account FROM dm_allretrun_analysis_d WHERE Account LIKE 'AmazonE
 - 逐账号复用 `refund_comments.py` 现有的取数 / 构 doc 逻辑（重构为可被 import 的函数，不再只是 `main()` 内联）。
 - 所有 doc 灌进**同一个 collection**（切换前为 `refund_comments_v2`，切换后即 `refund_comments`），collection 名由 CLI 参数 `--collection` 控制。
 - 每个 doc 设：
-  - `file_path = "{shop}/{orderId}"`，例 `EP-UK/302-1234567-1234567`。`shop` 由 account 逆映射得到。
+  - `file_path = "{shop}/{sku}/{orderId}"`，例 `EP-UK/EE02968/302-1234567-1234567`。`shop` 由 account 逆映射得到。含 SKU 是为了 ③ 的来源列表能渲染「站点 / SKU / 订单」三段。
   - `id = "{shop}::{orderId}::{sku}"` —— 加 shop 前缀防止跨市场 orderId/sku 撞 id（现有单账号 id 是 `{orderId}::{sku}`）。
+  - orderId / sku 为空时，对应段填 `unknown`，保证 file_path 段数稳定可解析。
 - manifest 幂等性保留：`_manifest.jsonl` 仍按 `(source_id, content_sha256)` 去重，编排脚本跑在新 collection 目录下，manifest 自然隔离。
 - CLI 参数：`--since`、`--limit`（每账号上限）、`--collection`、`--api-base`、`--dry-run`、`--force`。
 - 单账号 ingest 失败不中断整体：记录并继续下一账号，末尾汇总报告。
@@ -100,8 +97,9 @@ SELECT DISTINCT Account FROM dm_allretrun_analysis_d WHERE Account LIKE 'AmazonE
 - 传 `shop` → 把市场范围作为提示注入 query（如在 query 前加 `（限定店铺：EP-UK）`）；不传 → 不注入，跨市场查全部。
 - `outputSchema` 加 `references` 字段透传：`z.array(z.object({ referenceId: z.string(), filePath: z.string() }))`。
 - `description` 更新：删掉「EP-US only, 380 docs」「Other shops will reject」，改为 EP 全市场覆盖、shop 可选的说明。
+- **handler 把来源列表直接拼进 `answer` 字符串末尾**：每条解析 `file_path` 的 `{shop}/{sku}/{orderId}` 渲染为「站点 / SKU / 订单」。
 
-**机器人渲染层**：回答末尾附来源列表，每条渲染为 `站点 / SKU / orderId`（从 `file_path` 解析 `{shop}/{orderId}`）。具体渲染位置在实现计划中定位钉钉回复组装代码。
+**渲染策略修正**：钉钉机器人是独立 repo（`~/PycharmProjects/paperclip-dingtalk-bot/`），Pattern C LLM-dispatcher 通过 CLI 调本仓 tool-registry 工具。为避免跨 repo 协调，B2 **不改钉钉 repo**——B1 工具 handler 自己把来源段拼进 `answer`，钉钉 bot 原样渲染 `answer` 即显示。`outputSchema.references` 仍保留作结构化透传，供未来消费者使用。
 
 ### ④ 切换 playbook（零停机）
 
