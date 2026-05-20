@@ -91,6 +91,9 @@ def test_index_small_batch_calls_ainsert(app_and_rag):
     assert body["indexed"] == 2
     assert body["job_id"] is None
     rag.ainsert.assert_awaited_once()
+    _args, kwargs = rag.ainsert.call_args
+    assert kwargs["ids"] == ["d1", "d2"]
+    assert kwargs["file_paths"] == ["d1", "d2"]
 
 
 def test_search_returns_answer(app_and_rag):
@@ -348,6 +351,38 @@ def test_search_returns_references(app_and_rag, monkeypatch):
     assert len(body["references"]) == 2
     assert body["references"][0]["reference_id"] == "ref-1"
     assert body["references"][1]["file_path"] == "refund_comments/EG01923.json"
+
+
+def test_index_passes_file_paths_to_ainsert(app_and_rag):
+    app, rag = app_and_rag
+    payload = {
+        "collection": "refund_comments",
+        "docs": [
+            {"id": "EP-UK::ord1::EE02968", "text": "comment one",
+             "file_path": "EP-UK/EE02968/ord1"},
+            {"id": "EP-DE::ord2::EG01923", "text": "comment two",
+             "file_path": "EP-DE/EG01923/ord2"},
+        ],
+    }
+    with TestClient(app) as c:
+        r = c.post("/index", json=payload)
+    assert r.status_code == 202
+    _args, kwargs = rag.ainsert.call_args
+    assert kwargs["file_paths"] == ["EP-UK/EE02968/ord1", "EP-DE/EG01923/ord2"]
+    assert kwargs["ids"] == ["EP-UK::ord1::EE02968", "EP-DE::ord2::EG01923"]
+
+
+def test_index_file_path_falls_back_to_id(app_and_rag):
+    app, rag = app_and_rag
+    payload = {
+        "collection": "decisions",
+        "docs": [{"id": "d1", "text": "no file_path provided"}],
+    }
+    with TestClient(app) as c:
+        r = c.post("/index", json=payload)
+    assert r.status_code == 202
+    _args, kwargs = rag.ainsert.call_args
+    assert kwargs["file_paths"] == ["d1"]
 
 
 def test_search_handles_failure_status_with_empty_data(app_and_rag, monkeypatch):

@@ -17,6 +17,7 @@ class SearchMode(str, Enum):
 class IndexDoc(BaseModel):
     id: str
     text: str
+    file_path: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 

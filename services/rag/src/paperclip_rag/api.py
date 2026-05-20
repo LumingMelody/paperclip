@@ -116,8 +116,11 @@ def build_app(
         rag = await factory.get(req.collection)
         texts = [d.text for d in req.docs]
         ids = [d.id for d in req.docs]
+        # file_path drives LightRAG's reference list; fall back to id so a
+        # chunk is never the useless "unknown_source" default.
+        file_paths = [d.file_path or d.id for d in req.docs]
         try:
-            await rag.ainsert(texts, ids=ids)
+            await rag.ainsert(texts, ids=ids, file_paths=file_paths)
         except LMStudioUnavailable as e:
             raise HTTPException(503, {"error": {"code": "lm_studio_down", "message": str(e)}})
         return IndexResponse(indexed=len(req.docs), skipped=0)
