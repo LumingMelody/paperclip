@@ -23,9 +23,9 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import sys
-from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 import httpx
 import pymysql
@@ -37,6 +37,7 @@ from ..manifest import IngestManifest
 
 
 _REQUIRED_ENV = ("DWS_DB_HOST", "DWS_DB_USER", "DWS_DB_PASSWORD", "DWS_DB_DATABASE")
+_ACCOUNT_RE = re.compile(r"^EverPretty-([A-Z]{2})$")
 
 
 def _connect() -> pymysql.Connection:
@@ -110,15 +111,119 @@ def _row_to_text(r: dict[str, Any]) -> str:
     return "\n".join(parts)
 
 
-def _row_id(r: dict[str, Any]) -> str:
-    """Source ID = order_id + seller_sku, stable across re-runs."""
+def account_to_shop(account: str) -> str:
+    """`EverPretty-US` -> `EP-US`. Raises ValueError on any other format."""
+    m = _ACCOUNT_RE.match(account)
+    if not m:
+        raise ValueError(f"account must look like EverPretty-XX, got {account!r}")
+    return f"EP-{m.group(1)}"
+
+
+def _row_id(r: dict[str, Any], shop: str) -> str:
+    """Source ID = shop::order_id::seller_sku, stable across re-runs.
+
+    The shop prefix prevents the same orderId/sku colliding across markets
+    in the shared collection.
+    """
     oid = str(r.get("orderId") or "")
     sku = str(r.get("sellerSku") or "")
-    return f"{oid}::{sku}" if oid or sku else f"row:{hash(json.dumps(r, default=str)) & 0xFFFFFFFF:x}"
+    if not oid and not sku:
+        return f"{shop}::row:{hash(json.dumps(r, default=str)) & 0xFFFFFFFF:x}"
+    return f"{shop}::{oid}::{sku}"
+
+
+def _row_file_path(r: dict[str, Any], shop: str) -> str:
+    """file_path = shop/sku/orderId — drives LightRAG's reference list and is
+    parsed back into '站点 / SKU / 订单' by the B1 tool."""
+    oid = str(r.get("orderId") or "") or "unknown"
+    sku = str(r.get("sellerSku") or "") or "unknown"
+    return f"{shop}/{sku}/{oid}"
 
 
 def _content_sha(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+
+
+def build_docs(rows: list[dict[str, Any]], shop: str) -> list[dict[str, Any]]:
+    """Transform DWS refund rows into LightRAG index docs for one shop.
+
+    Pure: no DB, no manifest, no HTTP. Manifest/dup filtering is filter_new's job.
+    """
+    docs: list[dict[str, Any]] = []
+    for r in rows:
+        text = _row_to_text(r)
+        docs.append({
+            "id": _row_id(r, shop),
+            "text": text,
+            "file_path": _row_file_path(r, shop),
+            "metadata": {
+                "source": "dws_od_amazon_refund_rate_d",
+                "shop": shop,
+                "sellerSku": r.get("sellerSku"),
+                "styleCode": r.get("styleCode"),
+                "eventDate": str(r.get("eventDate") or ""),
+                "returnReason": r.get("returnReason"),
+                "orderId": r.get("orderId"),
+                "_sha": _content_sha(text),
+            },
+        })
+    return docs
+
+
+def filter_new(
+    docs: list[dict[str, Any]],
+    manifest: IngestManifest,
+    force: bool,
+) -> tuple[list[dict[str, Any]], int, int]:
+    """Drop docs already in the manifest and within-batch duplicate ids.
+
+    Returns (kept_docs, manifest_skipped, dup_id_deduped).
+    """
+    kept: list[dict[str, Any]] = []
+    skipped = 0
+    deduped = 0
+    seen_ids: set[str] = set()
+    for d in docs:
+        sid = d["id"]
+        sha = d["metadata"]["_sha"]
+        if not force and manifest.seen(sid, sha):
+            skipped += 1
+            continue
+        if sid in seen_ids:
+            deduped += 1
+            continue
+        seen_ids.add(sid)
+        kept.append(d)
+    return kept, skipped, deduped
+
+
+def post_docs(
+    api_base: str,
+    collection: str,
+    docs: list[dict[str, Any]],
+    timeout: float = 14400.0,
+) -> dict[str, Any]:
+    """POST docs to the RAG /index endpoint. Raises RuntimeError on any
+    failure — HTTP >= 300 or a network/connection error.
+
+    The 4h timeout matches synchronous LightRAG ingest of large batches —
+    a premature ReadTimeout would leave the manifest unwritten.
+    """
+    payload = {"collection": collection, "docs": docs, "upsert": True}
+    try:
+        with httpx.Client(timeout=timeout) as client:
+            resp = client.post(f"{api_base}/index", json=payload)
+    except httpx.HTTPError as e:
+        raise RuntimeError(f"ingest request failed: {e}") from e
+    if resp.status_code >= 300:
+        raise RuntimeError(f"ingest failed: {resp.status_code} {resp.text}")
+    return resp.json()
+
+
+def record_manifest(manifest: IngestManifest, docs: list[dict[str, Any]]) -> None:
+    """Record each successfully ingested doc's id + content sha into the manifest."""
+    for d in docs:
+        manifest.record(d["id"], d["metadata"]["_sha"], chunk_count=1)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -136,6 +241,11 @@ def main(argv: list[str] | None = None) -> int:
     if not args.account:
         logger.error("--account is required (or set PAPERCLIP_RAG_INGEST_ACCOUNT)")
         return 2
+    try:
+        shop = account_to_shop(args.account)
+    except ValueError as e:
+        logger.error("{}", e)
+        return 2
 
     logger.info("connecting to MySQL")
     try:
@@ -143,7 +253,6 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as e:
         logger.error("DB connect failed: {}", e)
         return 2
-
     try:
         rows = _fetch_rows(
             conn,
@@ -163,68 +272,31 @@ def main(argv: list[str] | None = None) -> int:
     manifest_path = settings.collection_dir(args.collection) / "_manifest.jsonl"
     manifest = IngestManifest(manifest_path)
 
-    docs = []
-    skipped = 0
-    deduped = 0
-    seen_ids: set[str] = set()
-    for r in rows:
-        text = _row_to_text(r)
-        sid = _row_id(r)
-        sha = _content_sha(text)
-        if not args.force and manifest.seen(sid, sha):
-            skipped += 1
-            continue
-        # The r-to-d join (and repeat returns of the same order+sku) can yield
-        # rows sharing orderId::sellerSku. LightRAG rejects a batch with
-        # duplicate ids, so keep the first occurrence and drop the rest.
-        if sid in seen_ids:
-            deduped += 1
-            continue
-        seen_ids.add(sid)
-        docs.append({
-            "id": sid,
-            "text": text,
-            "metadata": {
-                "source": "dws_od_amazon_refund_rate_d",
-                "sellerSku": r.get("sellerSku"),
-                "styleCode": r.get("styleCode"),
-                "eventDate": str(r.get("eventDate") or ""),
-                "returnReason": r.get("returnReason"),
-                "orderId": r.get("orderId"),
-                "_sha": sha,
-            },
-        })
-
+    docs = build_docs(rows, shop)
+    new_docs, skipped, deduped = filter_new(docs, manifest, args.force)
     logger.info(
         "after filter: {} new docs, {} manifest-skipped, {} dup-id-deduped",
-        len(docs), skipped, deduped,
+        len(new_docs), skipped, deduped,
     )
 
     if args.dry_run:
-        for d in docs[:3]:
+        for d in new_docs[:3]:
             print(json.dumps(d, ensure_ascii=False, default=str))
-        print(f"... total new: {len(docs)} (skipped {skipped})")
+        print(f"... total new: {len(new_docs)} (skipped {skipped})")
         return 0
 
-    if not docs:
+    if not new_docs:
         logger.info("nothing to ingest")
         return 0
 
-    payload = {"collection": args.collection, "docs": docs, "upsert": True}
-    logger.info("POSTing {} docs to {}/index", len(docs), args.api_base)
-    # 500 docs * ~8s/chunk synchronous LightRAG ingest can exceed 1h; give a
-    # 4h ceiling so the CLI doesn't ReadTimeout before the server finishes
-    # (a premature timeout means the manifest never gets written).
-    with httpx.Client(timeout=14400.0) as client:
-        r = client.post(f"{args.api_base}/index", json=payload)
-    if r.status_code >= 300:
-        logger.error("ingest failed: {} {}", r.status_code, r.text)
+    logger.info("POSTing {} docs to {}/index", len(new_docs), args.api_base)
+    try:
+        result = post_docs(args.api_base, args.collection, new_docs)
+    except RuntimeError as e:
+        logger.error("{}", e)
         return 1
-
-    # Manifest write only on success
-    for d in docs:
-        manifest.record(d["id"], d["metadata"]["_sha"], chunk_count=1)
-    logger.info("ingested: {}", r.json())
+    record_manifest(manifest, new_docs)
+    logger.info("ingested: {}", result)
     return 0
 
 
