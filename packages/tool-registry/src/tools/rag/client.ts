@@ -11,6 +11,7 @@ export interface RagSearchInput {
 
 export interface RagSearchOk {
   answer: string;
+  references?: Array<{ reference_id: string; file_path: string }>;
   meta?: {
     translation?: string | null;
     originalQuery?: string | null;
