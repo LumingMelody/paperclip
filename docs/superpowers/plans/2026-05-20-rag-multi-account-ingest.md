@@ -10,6 +10,8 @@
 
 **Spec:** `docs/superpowers/specs/2026-05-20-rag-multi-account-ingest-design.md`
 
+> **执行期修正（2026-05-20）**：本计划正文里的 `account_to_shop` / `discover_accounts` 代码块假设账号格式为 `EverPretty-*`。DB 实查证明实际是 `Amazon{品牌}{国家}`（`AmazonEPUS` …）。已实现的代码用 `^Amazon(EP|PZ|DAMA)([A-Z]{2})$` 正则、orchestrator `--account-pattern` 默认 `AmazonEP%`。**以 master 上已提交的代码为准**，下方 `EverPretty-*` 的代码块仅为历史记录。
+
 ---
 
 ## 文件结构

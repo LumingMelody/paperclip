@@ -7,14 +7,17 @@ from paperclip_rag.ingest.refund_comments import (
 )
 
 
-def test_account_to_shop_strips_everpretty_prefix():
-    assert account_to_shop("EverPretty-US") == "EP-US"
-    assert account_to_shop("EverPretty-UK") == "EP-UK"
-    assert account_to_shop("EverPretty-DE") == "EP-DE"
+def test_account_to_shop_maps_amazon_account():
+    assert account_to_shop("AmazonEPUS") == "EP-US"
+    assert account_to_shop("AmazonEPUK") == "EP-UK"
+    assert account_to_shop("AmazonEPDE") == "EP-DE"
+    assert account_to_shop("AmazonPZUS") == "PZ-US"
+    assert account_to_shop("AmazonDAMACA") == "DAMA-CA"
 
 
 def test_account_to_shop_rejects_unknown_format():
-    for bad in ("AmazonEPUS", "EverPretty-", "EverPretty-USA", "EverPretty-us", "EP-US"):
+    for bad in ("EverPretty-US", "AmazonEP", "AmazonEPUSA", "AmazonEPus",
+                "AmazonXXUS", "EP-US", "EPSITEUS"):
         with pytest.raises(ValueError):
             account_to_shop(bad)
 

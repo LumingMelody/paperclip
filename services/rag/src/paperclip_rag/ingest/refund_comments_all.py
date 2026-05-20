@@ -1,6 +1,6 @@
 """Multi-account ingest orchestrator for the `refund_comments` collection.
 
-Discovers every EverPretty-* account in dws `dm_allretrun_analysis_d`, then
+Discovers every AmazonEP* account in dws `dm_allretrun_analysis_d`, then
 runs the single-account ingest logic (from refund_comments.py) for each one,
 writing all docs into ONE shared collection. A single account's failure is
 logged and skipped — the run continues.
@@ -10,7 +10,7 @@ Usage:
         --since 2026-01-01 \\
         [--limit 1000] \\               # per-account row cap
         [--collection refund_comments_v2] \\
-        [--account-pattern 'EverPretty-%'] \\
+        [--account-pattern 'AmazonEP%'] \\
         [--api-base http://127.0.0.1:9001] \\
         [--dry-run] \\
         [--force]
@@ -36,7 +36,7 @@ from .refund_comments import (
 )
 
 
-def discover_accounts(conn: Any, pattern: str = "EverPretty-%") -> list[str]:
+def discover_accounts(conn: Any, pattern: str = "AmazonEP%") -> list[str]:
     """Return distinct Account values matching `pattern`, sorted."""
     sql = (
         "SELECT DISTINCT Account FROM dm_allretrun_analysis_d "
@@ -98,7 +98,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--since", required=True, help="ISO date, e.g. 2026-01-01")
     parser.add_argument("--limit", type=int, default=1000, help="per-account row cap")
     parser.add_argument("--collection", default="refund_comments_v2")
-    parser.add_argument("--account-pattern", default="EverPretty-%")
+    parser.add_argument("--account-pattern", default="AmazonEP%")
     parser.add_argument("--api-base", default="http://127.0.0.1:9001")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--force", action="store_true", help="bypass manifest skip")

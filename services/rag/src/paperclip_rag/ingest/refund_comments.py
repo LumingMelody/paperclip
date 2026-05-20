@@ -37,7 +37,7 @@ from ..manifest import IngestManifest
 
 
 _REQUIRED_ENV = ("DWS_DB_HOST", "DWS_DB_USER", "DWS_DB_PASSWORD", "DWS_DB_DATABASE")
-_ACCOUNT_RE = re.compile(r"^EverPretty-([A-Z]{2})$")
+_ACCOUNT_RE = re.compile(r"^Amazon(EP|PZ|DAMA)([A-Z]{2})$")
 
 
 def _connect() -> pymysql.Connection:
@@ -112,11 +112,14 @@ def _row_to_text(r: dict[str, Any]) -> str:
 
 
 def account_to_shop(account: str) -> str:
-    """`EverPretty-US` -> `EP-US`. Raises ValueError on any other format."""
+    """`AmazonEPUS` -> `EP-US`. Inverse of tool-registry `shopToAccount`.
+
+    Raises ValueError on any other format.
+    """
     m = _ACCOUNT_RE.match(account)
     if not m:
-        raise ValueError(f"account must look like EverPretty-XX, got {account!r}")
-    return f"EP-{m.group(1)}"
+        raise ValueError(f"account must look like AmazonEPUS, got {account!r}")
+    return f"{m.group(1)}-{m.group(2)}"
 
 
 def _row_id(r: dict[str, Any], shop: str) -> str:
