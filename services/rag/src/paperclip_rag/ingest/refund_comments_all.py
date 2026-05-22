@@ -8,7 +8,8 @@ logged and skipped — the run continues.
 Usage:
     uv run python -m paperclip_rag.ingest.refund_comments_all \\
         --since 2026-01-01 \\
-        [--limit 1000] \\               # per-account row cap
+        [--per-group 8] \\              # rows per sku/reason group
+        [--limit 100000] \\             # per-account hard cap
         [--collection refund_comments_v2] \\
         [--account-pattern 'AmazonEP%'] \\
         [--api-base http://127.0.0.1:9001] \\
@@ -26,6 +27,8 @@ from loguru import logger
 from ..config import get_settings
 from ..manifest import IngestManifest
 from .refund_comments import (
+    DEFAULT_LIMIT,
+    DEFAULT_PER_GROUP,
     _connect,
     _fetch_rows,
     account_to_shop,
@@ -51,6 +54,7 @@ def run_accounts(
     conn: Any,
     accounts: list[str],
     since: str,
+    per_group: int,
     limit: int,
     collection: str,
     api_base: str,
@@ -69,7 +73,12 @@ def run_accounts(
         try:
             shop = account_to_shop(account)
             rows = _fetch_rows(
-                conn, account=account, since=since, sku_prefix=None, limit=limit
+                conn,
+                account=account,
+                since=since,
+                sku_prefix=None,
+                per_group=per_group,
+                limit=limit,
             )
             entry["rows"] = len(rows)
             docs = build_docs(rows, shop)
@@ -96,7 +105,18 @@ def run_accounts(
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--since", required=True, help="ISO date, e.g. 2026-01-01")
-    parser.add_argument("--limit", type=int, default=1000, help="per-account row cap")
+    parser.add_argument(
+        "--per-group",
+        type=int,
+        default=DEFAULT_PER_GROUP,
+        help="rows to keep per (sku_left7, returnReason) group",
+    )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=DEFAULT_LIMIT,
+        help="per-account hard cap after per-group sampling",
+    )
     parser.add_argument("--collection", default="refund_comments_v2")
     parser.add_argument("--account-pattern", default="AmazonEP%")
     parser.add_argument("--api-base", default="http://127.0.0.1:9001")
@@ -134,6 +154,7 @@ def main(argv: list[str] | None = None) -> int:
             conn=conn,
             accounts=accounts,
             since=args.since,
+            per_group=args.per_group,
             limit=args.limit,
             collection=args.collection,
             api_base=args.api_base,

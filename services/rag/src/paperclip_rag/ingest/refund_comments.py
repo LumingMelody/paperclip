@@ -9,7 +9,8 @@ source_id; sha256 of the comment body as content hash for manifest idempotency.
 Usage:
     uv run python -m paperclip_rag.ingest.refund_comments \\
         --since 2026-01-01 \\
-        --limit 500 \\
+        --per-group 8 \\
+        --limit 100000 \\
         [--sku-prefix EG] \\
         [--account ACCOUNT_ID]      # else read PAPERCLIP_RAG_INGEST_ACCOUNT
         [--api-base http://127.0.0.1:9001] \\
@@ -38,6 +39,8 @@ from ..manifest import IngestManifest
 
 _REQUIRED_ENV = ("DWS_DB_HOST", "DWS_DB_USER", "DWS_DB_PASSWORD", "DWS_DB_DATABASE")
 _ACCOUNT_RE = re.compile(r"^Amazon(EP|PZ|DAMA)([A-Z]{2})$")
+DEFAULT_PER_GROUP = 8
+DEFAULT_LIMIT = 100_000
 
 
 def _connect() -> pymysql.Connection:
@@ -61,33 +64,56 @@ def _fetch_rows(
     account: str,
     since: str,
     sku_prefix: str | None,
+    per_group: int,
     limit: int,
 ) -> list[dict[str, Any]]:
     sql = """
         SELECT
-            r.check_date AS eventDate,
-            r.seller_sku AS sellerSku,
-            r.sku_left7 AS styleCode,
-            r.size,
-            r.color,
-            r.returnReason,
-            r.customer_comments AS customerComment,
-            r.quantity,
-            r.rf_quantity AS refundQuantity,
-            r.amazon_order_id AS orderId
-        FROM dws_od_amazon_refund_rate_d r
-        INNER JOIN dm_allretrun_analysis_d d
-            ON r.amazon_order_id = d.orderid
-        WHERE d.Account = %(account)s
-          AND r.check_date >= %(since)s
-          AND r.customer_comments IS NOT NULL
-          AND r.customer_comments != ''
+            sampled.eventDate,
+            sampled.sellerSku,
+            sampled.styleCode,
+            sampled.size,
+            sampled.color,
+            sampled.returnReason,
+            sampled.customerComment,
+            sampled.quantity,
+            sampled.refundQuantity,
+            sampled.orderId
+        FROM (
+            SELECT
+                r.check_date AS eventDate,
+                r.seller_sku AS sellerSku,
+                r.sku_left7 AS styleCode,
+                r.size,
+                r.color,
+                r.returnReason,
+                r.customer_comments AS customerComment,
+                r.quantity,
+                r.rf_quantity AS refundQuantity,
+                r.amazon_order_id AS orderId,
+                ROW_NUMBER() OVER (
+                    PARTITION BY r.sku_left7, r.returnReason
+                    ORDER BY r.check_date DESC
+                ) AS rk
+            FROM dws_od_amazon_refund_rate_d r
+            INNER JOIN dm_allretrun_analysis_d d
+                ON r.amazon_order_id = d.orderid
+            WHERE d.Account = %(account)s
+              AND r.check_date >= %(since)s
+              AND r.customer_comments IS NOT NULL
+              AND r.customer_comments != ''
     """
     params: dict[str, Any] = {"account": account, "since": since}
     if sku_prefix:
         sql += " AND r.seller_sku LIKE %(sku_prefix)s"
         params["sku_prefix"] = f"{sku_prefix}%"
-    sql += " ORDER BY r.check_date DESC LIMIT %(limit)s"
+    sql += """
+        ) sampled
+        WHERE sampled.rk <= %(per_group)s
+        ORDER BY sampled.eventDate DESC
+        LIMIT %(limit)s
+    """
+    params["per_group"] = per_group
     params["limit"] = limit
     with conn.cursor() as cur:
         cur.execute(sql, params)
@@ -232,7 +258,18 @@ def record_manifest(manifest: IngestManifest, docs: list[dict[str, Any]]) -> Non
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--since", required=True, help="ISO date, e.g. 2026-01-01")
-    parser.add_argument("--limit", type=int, default=500)
+    parser.add_argument(
+        "--per-group",
+        type=int,
+        default=DEFAULT_PER_GROUP,
+        help="rows to keep per (sku_left7, returnReason) group",
+    )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=DEFAULT_LIMIT,
+        help="per-account hard cap after per-group sampling",
+    )
     parser.add_argument("--sku-prefix", default=None)
     parser.add_argument("--account", default=os.environ.get("PAPERCLIP_RAG_INGEST_ACCOUNT"))
     parser.add_argument("--api-base", default="http://127.0.0.1:9001")
@@ -262,6 +299,7 @@ def main(argv: list[str] | None = None) -> int:
             account=args.account,
             since=args.since,
             sku_prefix=args.sku_prefix,
+            per_group=args.per_group,
             limit=args.limit,
         )
     finally:

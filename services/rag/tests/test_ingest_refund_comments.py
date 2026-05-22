@@ -1,9 +1,13 @@
 import pytest
 
 from paperclip_rag.ingest.refund_comments import (
+    DEFAULT_LIMIT,
+    DEFAULT_PER_GROUP,
+    _fetch_rows,
     account_to_shop,
     build_docs,
     filter_new,
+    main,
 )
 
 
@@ -49,6 +53,101 @@ def test_build_docs_fills_unknown_for_missing_order_and_sku():
     docs = build_docs(rows, "EP-FR")
     assert docs[0]["file_path"] == "EP-FR/unknown/unknown"
     assert docs[0]["id"].startswith("EP-FR::")
+
+
+class _FakeCursor:
+    def __init__(self, rows):
+        self.rows = rows
+        self.execute_calls = []
+
+    def execute(self, sql, params):
+        self.execute_calls.append((sql, params))
+
+    def fetchall(self):
+        return self.rows
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+
+class _FakeConn:
+    def __init__(self, rows=None):
+        self.cursor_obj = _FakeCursor(rows or [])
+        self.closed = False
+
+    def cursor(self):
+        return self.cursor_obj
+
+    def close(self):
+        self.closed = True
+
+
+def test_fetch_rows_uses_windowed_per_group_sampling_and_sku_prefix():
+    rows = [{"sellerSku": "EG123", "customerComment": "too small"}]
+    conn = _FakeConn(rows)
+
+    result = _fetch_rows(
+        conn,
+        account="AmazonEPUS",
+        since="2026-01-01",
+        sku_prefix="EG",
+        per_group=3,
+        limit=100,
+    )
+
+    assert result == rows
+    sql, params = conn.cursor_obj.execute_calls[0]
+    normalized = " ".join(sql.split())
+    assert "ROW_NUMBER() OVER" in normalized
+    assert "PARTITION BY r.sku_left7, r.returnReason" in normalized
+    assert "ORDER BY r.check_date DESC" in normalized
+    assert "WHERE d.Account = %(account)s" in normalized
+    assert "AND r.check_date >= %(since)s" in normalized
+    assert "AND r.customer_comments IS NOT NULL" in normalized
+    assert "AND r.customer_comments != ''" in normalized
+    assert "AND r.seller_sku LIKE %(sku_prefix)s" in normalized
+    assert "WHERE sampled.rk <= %(per_group)s" in normalized
+    assert "LIMIT %(limit)s" in normalized
+    assert params == {
+        "account": "AmazonEPUS",
+        "since": "2026-01-01",
+        "sku_prefix": "EG%",
+        "per_group": 3,
+        "limit": 100,
+    }
+
+
+def test_main_defaults_to_per_group_sampling_with_large_hard_limit(monkeypatch):
+    conn = _FakeConn()
+    captured = {}
+
+    def fake_fetch(conn, account, since, sku_prefix, per_group, limit):
+        captured.update({
+            "account": account,
+            "since": since,
+            "sku_prefix": sku_prefix,
+            "per_group": per_group,
+            "limit": limit,
+        })
+        return []
+
+    monkeypatch.setattr("paperclip_rag.ingest.refund_comments._connect", lambda: conn)
+    monkeypatch.setattr("paperclip_rag.ingest.refund_comments._fetch_rows", fake_fetch)
+
+    rc = main(["--since", "2026-01-01", "--account", "AmazonEPUS"])
+
+    assert rc == 0
+    assert captured == {
+        "account": "AmazonEPUS",
+        "since": "2026-01-01",
+        "sku_prefix": None,
+        "per_group": DEFAULT_PER_GROUP,
+        "limit": DEFAULT_LIMIT,
+    }
+    assert conn.closed is True
 
 
 class _FakeManifest:
