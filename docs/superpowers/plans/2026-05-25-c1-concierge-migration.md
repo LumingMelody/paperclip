@@ -89,12 +89,7 @@ grep -rn "openai\|baseURL.*tabcode" server/src/ packages/ | head -20
 3. 现役 LLM provider + API key 配置位置（环境变量名 / 配置文件）
 4. 新 agent 创建后是否自动被 heartbeat scheduler 纳管（如果不，要做什么注册动作）
 
-- [ ] **Step 4: Commit spec**
-
-```bash
-git add docs/superpowers/specs/2026-05-25-c1-concierge-spec.md
-git commit -m "docs(c1): concierge migration — agent-runtime spec"
-```
+- [x] **Step 4: Commit spec** (6238811c)
 
 ### Task 0.2: 验证 issue 状态变更的事件钩子
 
@@ -102,27 +97,9 @@ git commit -m "docs(c1): concierge migration — agent-runtime spec"
 - Read: `server/src/services/live-events.ts:27-34`
 - Read: `server/src/services/issues.ts`（搜 `publishLiveEvent` 出现位置 + `status: "done"` 写入点）
 
-- [ ] **Step 1: 确认 issue → done 时是否 publishLiveEvent**
-
-```bash
-cd /Users/melodylu/PycharmProjects/paperclip/server
-grep -n "publishLiveEvent\|status.*done" src/services/issues.ts | head -20
-```
-
-期望找到形如 `publishLiveEvent({ companyId, type: "issue.updated", payload })` 的写入点。
-
-- [ ] **Step 2: 决定 bot 的 done-检测策略**
-
-把决策写入 spec doc 的「轮询 vs WebSocket」一节：
-- **MVP 决策**：bot 用短轮询（5s 间隔，5min 超时）。理由：实现最简单、调试最容易，bot 单用户单群体可接受 5s 延迟。WebSocket 留 v2。
-- 把此结论补进 `docs/superpowers/specs/2026-05-25-c1-concierge-spec.md`。
-
-- [ ] **Step 3: Commit**
-
-```bash
-git add docs/superpowers/specs/2026-05-25-c1-concierge-spec.md
-git commit --amend --no-edit
-```
+- [x] **Step 1: 确认 issue → done 时是否 publishLiveEvent** (spec §3：has publishLiveEvent on updateStatus, no dedicated done event)
+- [x] **Step 2: 决定 bot 的 done-检测策略** (spec D2: 短轮询 5s / 5min 超时)
+- [x] **Step 3: Commit** (6238811c)
 
 ---
 
@@ -135,7 +112,7 @@ git commit --amend --no-edit
 **Files:**
 - Test: `server/src/__tests__/chat-service.test.ts`
 
-- [ ] **Step 1: 写测试文件**
+- [x] **Step 1: 写测试文件**
 
 参考 `server/src/__tests__/monthly-spend-service.test.ts` 第 1-50 行的 vitest + mock-chain pattern，写：
 
@@ -179,21 +156,14 @@ function createFakeDb() {
 
 补完 `createFakeDb` 和第二个 test case 主体。
 
-- [ ] **Step 2: 跑测试确认 FAIL**
-
-```bash
-cd /Users/melodylu/PycharmProjects/paperclip/server
-pnpm vitest run src/__tests__/chat-service.test.ts
-```
-
-预期：`Cannot find module '../services/chat.ts'` 或 `chatService is not a function`。
+- [x] **Step 2: 跑测试确认 FAIL** (实际错误: `Cannot find module '../services/chat.ts'`)
 
 ### Task 1.2: 实现 service 层
 
 **Files:**
 - Create: `server/src/services/chat.ts`
 
-- [ ] **Step 1: 写最小实现**
+- [x] **Step 1: 写最小实现** (实际 import: `@paperclipai/db` 不是 `@paperclip/db`)
 
 ```typescript
 import { eq } from "drizzle-orm";
@@ -280,24 +250,8 @@ export function chatService(deps: ChatServiceDeps) {
 
 注：`dingtalk_conversation_key` 列下面 Task 1.3 加。
 
-- [ ] **Step 2: 跑测试确认 PASS**
-
-```bash
-pnpm vitest run src/__tests__/chat-service.test.ts
-```
-
-预期：两个 case 全 pass。如有失败，调整 service 实现直到通过；不要改测试预期。
-
-- [ ] **Step 3: Commit**
-
-```bash
-git add server/src/services/chat.ts server/src/__tests__/chat-service.test.ts
-git commit -m "feat(server): chat service — issue-as-conversation container
-
-POST /api/chat 的业务逻辑：senderKey 维度查最近未完成 issue，
-有就追加 comment，没有就新建 issue 并 assignee=Concierge agent。
-两路径都触发 queueIssueAssignmentWakeup。"
-```
+- [x] **Step 2: 跑测试确认 PASS** (2/0)
+- [x] **Step 3: Commit** (a48b... — `feat(server): chat service`)
 
 ### Task 1.3: DB migration — issues 加 dingtalk_conversation_key 列
 
@@ -305,57 +259,17 @@ POST /api/chat 的业务逻辑：senderKey 维度查最近未完成 issue，
 - Create: `packages/db/src/migrations/00XX_chat_conversation_key.sql`（编号取当前最大 +1）
 - Modify: `packages/db/src/schema/issues.ts`（加 `dingtalkConversationKey: text("dingtalk_conversation_key")`）
 
-- [ ] **Step 1: 看当前最大 migration 编号**
-
-```bash
-ls /Users/melodylu/PycharmProjects/paperclip/packages/db/src/migrations/*.sql | sort | tail -3
-```
-
-假设最大是 0075 → 新编号 0076。
-
-- [ ] **Step 2: 写 migration**
-
-```sql
-ALTER TABLE "issues" ADD COLUMN "dingtalk_conversation_key" text;
---> statement-breakpoint
-CREATE INDEX "issues_dingtalk_conv_key_status_idx" ON "issues"
-  USING btree ("company_id","dingtalk_conversation_key","status");
-```
-
-- [ ] **Step 3: 同步 Drizzle schema**
-
-在 `packages/db/src/schema/issues.ts` 的 issues 表定义里加：
-```typescript
-dingtalkConversationKey: text("dingtalk_conversation_key"),
-```
-
-- [ ] **Step 4: 跑 migration（本地 dev DB）**
-
-```bash
-cd /Users/melodylu/PycharmProjects/paperclip
-pnpm --filter @paperclip/db migrate
-```
-
-预期：migration 0076 应用成功，schema sync 通过。
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add packages/db/src/migrations/0076_chat_conversation_key.sql packages/db/src/schema/issues.ts
-git commit -m "feat(db): issues add dingtalk_conversation_key for chat session lookup"
-```
+- [x] **Step 1: 看当前最大 migration 编号** (0075)
+- [x] **Step 2/3: 改 schema + drizzle-kit generate 自动出 SQL** (`pnpm generate` 出 `0076_first_blink.sql`，正路；不要手写 SQL，会跟 journal 不匹配)
+- [x] **Step 4: 跑 migration** (`pnpm --filter @paperclipai/db migrate` 成功；包名是 `@paperclipai/db`)
+- [x] **Step 5: Commit** (含 0076 sql + meta/_journal.json + meta/0076_snapshot.json + schema/issues.ts)
 
 ### Task 1.4: 写 route layer 失败测试
 
 **Files:**
 - Test: `server/src/__tests__/chat-routes.test.ts`
 
-- [ ] **Step 1: 写测试**
-
-参考 `server/src/__tests__/` 下任一 routes 测试（grep `from "../routes"` 找近似 pattern）。MVP 至少 3 个 case：
-1. POST /api/chat 正常返回 { issueId, created: true } + status 201
-2. POST /api/chat 缺 text → 422 (zod validation)
-3. POST /api/chat 服务层抛 → 500 + error payload
+- [x] **Step 1: 写测试** (3 case, 400 not 422 — paperclip's errorHandler maps ZodError → 400)
 
 ```typescript
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -397,20 +311,14 @@ describe("POST /chat", () => {
 });
 ```
 
-- [ ] **Step 2: 跑测试确认 FAIL**
-
-```bash
-pnpm vitest run src/__tests__/chat-routes.test.ts
-```
-
-预期：`Cannot find module '../routes/chat.ts'`。
+- [x] **Step 2: 跑测试确认 FAIL** (`Cannot find module '../routes/chat.ts'`)
 
 ### Task 1.5: 实现 route layer
 
 **Files:**
 - Create: `server/src/routes/chat.ts`
 
-- [ ] **Step 1: 写最小实现**
+- [x] **Step 1: 写最小实现**
 
 ```typescript
 import { Router } from "express";
@@ -446,59 +354,17 @@ export function chatRoutes(deps: ChatRoutesDeps) {
 }
 ```
 
-- [ ] **Step 2: 跑测试确认 PASS**
-
-```bash
-pnpm vitest run src/__tests__/chat-routes.test.ts
-```
-
-- [ ] **Step 3: Commit**
-
-```bash
-git add server/src/routes/chat.ts server/src/__tests__/chat-routes.test.ts
-git commit -m "feat(server): POST /api/chat route — DingTalk bot entry point"
-```
+- [x] **Step 2: 跑测试确认 PASS** (3/0)
+- [x] **Step 3: Commit**
 
 ### Task 1.6: 挂载到 app.ts
 
 **Files:**
 - Modify: `server/src/app.ts`（在第 180-296 行 `api.use(...)` 区段加一行）
 
-- [ ] **Step 1: 加挂载**
-
-在 app.ts 现有 `api.use(...)` 区段（参考 `api.use(issueRoutes(db, storageService))` 之类）后面加：
-
-```typescript
-import { chatRoutes } from "./routes/chat.ts";
-import { chatService } from "./services/chat.ts";
-// ...
-const conciergeAgentId = process.env.PAPERCLIP_CONCIERGE_AGENT_ID;
-if (!conciergeAgentId) {
-  logger.warn("PAPERCLIP_CONCIERGE_AGENT_ID not set; /api/chat will fail at runtime");
-}
-api.use(chatRoutes({
-  chatService: chatService({
-    db,
-    conciergeAgentId: conciergeAgentId ?? "MISSING",
-    heartbeat: heartbeatService,  // 真实 heartbeat service 实例，参考其它 routes 怎么注入
-  }),
-}));
-```
-
-- [ ] **Step 2: 跑全部 server 测试不能炸**
-
-```bash
-pnpm vitest run
-```
-
-预期：所有现有测试 + chat-routes / chat-service 测试全 pass。
-
-- [ ] **Step 3: Commit**
-
-```bash
-git add server/src/app.ts
-git commit -m "feat(server): mount POST /api/chat with concierge agent id from env"
-```
+- [x] **Step 1: 加挂载** (`.js` extensions per paperclip convention; heartbeat constructed inline like other routes; commit fd9e54df also fixed `issueListSelect` to include new column)
+- [x] **Step 2: tsc clean + 5/5 chat tests pass**
+- [x] **Step 3: Commit** (fd9e54df)
 
 ---
 
@@ -511,32 +377,15 @@ git commit -m "feat(server): mount POST /api/chat with concierge agent id from e
 **Files:**
 - Create: `docs/agents/concierge.md`
 
-- [ ] **Step 1: 写 prompt 文档**
-
-照搬 bot 现有 `SYSTEM_PROMPT_TEMPLATE`（在 `~/PycharmProjects/paperclip-dingtalk-bot/llm_dispatcher.py:23+`），把里面跟"我是 EverPretty 智能助手 / 退货专题三段式 / RAG vs DWS 选择"等所有专题保留。新增一段说明 Concierge 的「路由 + 答题」职责：
-- 默认自己用 22 个工具直接答（v1 不派 sub-issue 给其它业务 agent，那是 v2）
-- 答完直接把 markdown 写进 issue.comments（最后一条 comment 视为最终答案）
-- 设 issue.status = done
-
-`docs/agents/concierge.md` 至少含：
-- role: "Concierge / general dispatcher"
-- prompt（完整 markdown 字符串）
-- tool whitelist: 全部 22 个 tool ID（list）
-- LLM provider: 沿用 paperclip 现役 agent 的 provider（Phase 0 spec 确认过用哪个）
-
-- [ ] **Step 2: Commit**
-
-```bash
-git add docs/agents/concierge.md
-git commit -m "docs(c1): concierge agent prompt + tool whitelist spec"
-```
+- [x] **Step 1: 写 prompt 文档** (docs/agents/concierge.md — 133 行，含完整 system prompt + 22 tool whitelist + role)
+- [x] **Step 2: Commit**
 
 ### Task 2.2: 写 seed 脚本
 
 **Files:**
 - Create: `scripts/seed-concierge-agent.ts`
 
-- [ ] **Step 1: 写脚本**
+- [x] **Step 1: 写脚本** (用 bash + curl 而非 tsx，避免 build；idempotent，幂等 upsert)
 
 ```typescript
 #!/usr/bin/env tsx
@@ -597,36 +446,22 @@ main().catch((e) => { console.error(e); process.exit(1); });
 
 注：agents 表实际字段名要按 `packages/db/src/schema/agents.ts` 调整。tool whitelist 字段名 + 类型同。
 
-- [ ] **Step 2: 跑 seed**
-
-```bash
-cd /Users/melodylu/PycharmProjects/paperclip
-export PAPERCLIP_COMPANY_ID=a0f62167-5f88-475b-bdc0-3d4cb80184dc  # 从 tool-secrets.json 拿
-tsx scripts/seed-concierge-agent.ts
-```
-
-预期：stdout 输出一个 UUID（Concierge agent ID）。把它存到 `.env.local` 当 `PAPERCLIP_CONCIERGE_AGENT_ID`。
-
-- [ ] **Step 3: Commit**
-
-```bash
-git add scripts/seed-concierge-agent.ts
-git commit -m "feat(c1): seed script for Concierge agent (idempotent upsert)"
-```
+- [x] **Step 2: 跑 seed** → UUID `40560fc7-a40b-4106-806f-95a7060c8e0b`
+- [x] **Step 3: Commit**
 
 ### Task 2.3: 手工触发一次 Concierge 跑通
 
 **Files:**
 - 无新文件，使用 curl
 
-- [ ] **Step 1: 启动 server（确保 PAPERCLIP_CONCIERGE_AGENT_ID 已 export）**
+- [x] **Step 1: 启动 server（确保 PAPERCLIP_CONCIERGE_AGENT_ID 已 export）** (写入 paperclip-dev plist EnvironmentVariables, launchctl unload+load 生效)
 
 ```bash
 cd /Users/melodylu/PycharmProjects/paperclip
 PAPERCLIP_CONCIERGE_AGENT_ID=<seed 输出的 uuid> pnpm dev
 ```
 
-- [ ] **Step 2: curl 触发 chat**
+- [x] **Step 2: curl 触发 chat** (issueId=255948af-d7cb-4af7-b156-2ce117320c85, created=true, < 500ms)
 
 ```bash
 curl -s -XPOST http://127.0.0.1:3100/api/chat -H 'content-type: application/json' -d '{
@@ -639,25 +474,8 @@ curl -s -XPOST http://127.0.0.1:3100/api/chat -H 'content-type: application/json
 
 预期：返回 `{ "issueId": "...", "created": true }`，立即返回（< 500ms）。
 
-- [ ] **Step 3: 观察 issue 是否被 Concierge 处理**
-
-打开 paperclip Web UI（http://127.0.0.1:3100），找到刚创建的 issue：
-- 看 assignee 是不是 Concierge
-- 等 ≤ 60s 看 status 是否变 done
-- 看 issue.comments 是不是出现 Concierge 的答案
-
-成功标准：Concierge agent 在 60s 内完成 issue 并把 markdown 答案写入 comment。
-
-如果失败：回到 Phase 0 spec doc 复查 agent runtime 模型，可能需要补一步注册 Concierge 到 heartbeat scheduler 或类似动作。
-
-- [ ] **Step 4: 把成功标准写入 spec doc + commit**
-
-```bash
-# 把 curl 的 issue 状态变化时间、Concierge 答案样例追加到
-# docs/superpowers/specs/2026-05-25-c1-concierge-spec.md 的「Phase 2 验收记录」段
-git add docs/superpowers/specs/2026-05-25-c1-concierge-spec.md
-git commit -m "docs(c1): phase 2 — concierge end-to-end run record"
-```
+- [x] **Step 3: 观察 issue 是否被 Concierge 处理** (status in_progress → done in ~110s; 3 comments incl 864-char 三段式答案)
+- [x] **Step 4: spec doc 记录 + commit** (详见 spec §9 + ⚠️ Phase 3 注意事项段)
 
 ---
 
