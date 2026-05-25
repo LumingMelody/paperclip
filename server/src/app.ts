@@ -31,6 +31,8 @@ import { sidebarBadgeRoutes } from "./routes/sidebar-badges.js";
 import { sidebarPreferenceRoutes } from "./routes/sidebar-preferences.js";
 import { inboxDismissalRoutes } from "./routes/inbox-dismissals.js";
 import { instanceSettingsRoutes } from "./routes/instance-settings.js";
+import { chatRoutes } from "./routes/chat.js";
+import { chatService, heartbeatService } from "./services/index.js";
 import {
   instanceDatabaseBackupRoutes,
   type InstanceDatabaseBackupService,
@@ -208,6 +210,23 @@ export async function createApp(
   api.use(secretRoutes(db));
   api.use(costRoutes(db, { pluginWorkerManager: workerManager }));
   api.use(activityRoutes(db));
+  // C1 Concierge migration: POST /api/chat — DingTalk bot entry point.
+  // Requires PAPERCLIP_CONCIERGE_AGENT_ID env (see scripts/seed-concierge-agent.ts).
+  {
+    const conciergeAgentId = process.env.PAPERCLIP_CONCIERGE_AGENT_ID;
+    if (!conciergeAgentId) {
+      logger.warn(
+        "PAPERCLIP_CONCIERGE_AGENT_ID not set; /api/chat will assign issues to placeholder UUID and wakeup will no-op",
+      );
+    }
+    const chatHeartbeat = heartbeatService(db, { pluginWorkerManager: workerManager });
+    const chat = chatService({
+      db,
+      conciergeAgentId: conciergeAgentId ?? "00000000-0000-0000-0000-000000000000",
+      heartbeat: chatHeartbeat,
+    });
+    api.use(chatRoutes({ chatService: chat }));
+  }
   api.use(dashboardRoutes(db));
   api.use(userProfileRoutes(db));
   api.use(sidebarBadgeRoutes(db));

@@ -12,7 +12,7 @@
 import { and, eq, gt, inArray, notInArray } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import { issueComments, issues } from "@paperclipai/db";
-import { queueIssueAssignmentWakeup } from "./issue-assignment-wakeup.ts";
+import { queueIssueAssignmentWakeup } from "./issue-assignment-wakeup.js";
 
 export interface ChatServiceDeps {
   db: Db;

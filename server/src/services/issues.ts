@@ -1418,6 +1418,7 @@ const issueListSelect = {
   completedAt: issues.completedAt,
   cancelledAt: issues.cancelledAt,
   hiddenAt: issues.hiddenAt,
+  dingtalkConversationKey: issues.dingtalkConversationKey,
   createdAt: issues.createdAt,
   updatedAt: issues.updatedAt,
 };

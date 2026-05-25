@@ -17,8 +17,8 @@
 import { Router } from "express";
 import { z } from "zod";
 
-import { validate } from "../middleware/validate.ts";
-import type { chatService } from "../services/chat.ts";
+import { validate } from "../middleware/validate.js";
+import type { chatService } from "../services/chat.js";
 
 const chatRequestSchema = z.object({
   companyId: z.string().min(1),
