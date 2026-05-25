@@ -2,42 +2,40 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>Label</key>
-  <string>com.everpretty.paperclip-dev</string>
-
-  <key>ProgramArguments</key>
-  <array>
-    <string>/Users/melodylu/PycharmProjects/paperclip/launchd/run.sh</string>
-  </array>
-
-  <key>WorkingDirectory</key>
-  <string>/Users/melodylu/PycharmProjects/paperclip</string>
-
-  <key>RunAtLoad</key>
-  <true/>
-
-  <key>KeepAlive</key>
-  <true/>
-
-  <key>ThrottleInterval</key>
-  <integer>30</integer>
-
-  <key>StandardOutPath</key>
-  <string>/Users/melodylu/PycharmProjects/paperclip/_logs/paperclip-dev.out.log</string>
-
-  <key>StandardErrorPath</key>
-  <string>/Users/melodylu/PycharmProjects/paperclip/_logs/paperclip-dev.err.log</string>
-
-  <key>EnvironmentVariables</key>
-  <dict>
-    <key>PATH</key>
-    <string>/Users/melodylu/.nvm/versions/node/v24.13.0/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
-    <key>HOME</key>
-    <string>/Users/melodylu</string>
-    <key>LANG</key>
-    <string>en_US.UTF-8</string>
-    <key>PNPM_HOME</key>
-    <string>/Users/melodylu/.local/share/pnpm</string>
-  </dict>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>DINGTALK_APP_KEY</key>
+		<string>dingtpifhvqq13uoghjw</string>
+		<key>DINGTALK_APP_SECRET</key>
+		<string>rcvZaDPns0IADJaSAjmdAF5ZrK5LGd-jVjKUpS3gBkNEVA2OXIOkEAg3erXKgSpi</string>
+		<key>DINGTALK_PUSH_GROUP</key>
+		<string>亚马逊库存机器人测试群</string>
+		<key>HOME</key>
+		<string>/Users/melodylu</string>
+		<key>LANG</key>
+		<string>en_US.UTF-8</string>
+		<key>PATH</key>
+		<string>/Users/melodylu/.nvm/versions/node/v24.13.0/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+		<key>PNPM_HOME</key>
+		<string>/Users/melodylu/.local/share/pnpm</string>
+	</dict>
+	<key>KeepAlive</key>
+	<true/>
+	<key>Label</key>
+	<string>com.everpretty.paperclip-dev</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/Users/melodylu/PycharmProjects/paperclip/launchd/run.sh</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>StandardErrorPath</key>
+	<string>/Users/melodylu/PycharmProjects/paperclip/_logs/paperclip-dev.err.log</string>
+	<key>StandardOutPath</key>
+	<string>/Users/melodylu/PycharmProjects/paperclip/_logs/paperclip-dev.out.log</string>
+	<key>ThrottleInterval</key>
+	<integer>30</integer>
+	<key>WorkingDirectory</key>
+	<string>/Users/melodylu/PycharmProjects/paperclip</string>
 </dict>
 </plist>

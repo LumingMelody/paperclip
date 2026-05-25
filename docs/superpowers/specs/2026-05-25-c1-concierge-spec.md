@@ -148,3 +148,19 @@ CREATE INDEX "issues_dingtalk_conv_key_status_idx" ON "issues"
 ## 10. Phase 4 端到端验收
 
 （Phase 4 完成后追加钉钉群验证截图 / 时间戳 / fallback 注入结果）
+
+## Phase 2 验收记录
+
+- Concierge agent UUID: `40560fc7-a40b-4106-806f-95a7060c8e0b`
+- POST /api/chat → 返回 `{issueId, created: true}` 立即 (< 500ms)
+- issue 经 11 次 10s 轮询从 `in_progress` → `done`（约 110s）
+- issue_comments 落 3 条：
+  1. 我们 POST 时插入的 user comment（authorUserId=test-user-c1-e2e）
+  2. **Concierge 实际答案 (864 chars)**，三段式完整（现状/主因/建议），author 是 `authorUserId=local-board`（不是 Concierge `authorAgentId`！）—— claude_local adapter 内部以 local-board 用户身份写 comment
+  3. Concierge agent confirmation note (429 chars)，author=Concierge `authorAgentId`
+
+## ⚠️ Phase 3 bot 端必须知道的细节
+
+bot 端 poll_worker 拉答案时**不能**只过滤 `authorAgentId == Concierge UUID` — 那样会拿到「完成确认」而不是真正的答案体。
+
+正确策略：拉最近一条 **非 senderKey** 的 comment（即排除自己 POST 进去的 user comment），按 createdAt DESC 取第一条。这样既覆盖 Concierge 直接写的 (`authorAgentId`) 也覆盖 adapter 以 `local-board` 用户身份写的。
