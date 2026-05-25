@@ -599,7 +599,7 @@ def _iter_conversation_records(value: Any) -> list[dict[str, Any]]:
             if isinstance(item, dict):
                 records.append(item)
     elif isinstance(value, dict):
-        if any(key in value for key in ("openConversationId", "open_conversation_id", "conversationId")):
+        if any(key in value for key in ("openConversationId", "open_conversation_id", "conversationId", "id")):
             records.append(value)
         for key in ("conversations", "items", "groups", "data", "result"):
             records.extend(_iter_conversation_records(value.get(key)))

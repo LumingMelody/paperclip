@@ -81,15 +81,30 @@ try:
 except FileNotFoundError:
     plist_env = {}
 
+# Bot reads creds from its .env (loaded by python-dotenv in config.py).
+bot_dotenv = {}
+bot_env_path = home / "PycharmProjects" / "paperclip-dingtalk-bot" / ".env"
+try:
+    for line in bot_env_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        bot_dotenv[k.strip()] = v.strip().strip('"').strip("'")
+except FileNotFoundError:
+    pass
+
 app_key = (
     os.environ.get("DINGTALK_APP_KEY")
     or plist_env.get("DINGTALK_APP_KEY")
+    or bot_dotenv.get("DINGTALK_APP_KEY")
     or find_normalized(secrets, {"dingtalk_app_key"})
     or find_in_named_section(secrets, "dingtalk", {"app_key", "appkey", "key"})
 )
 app_secret = (
     os.environ.get("DINGTALK_APP_SECRET")
     or plist_env.get("DINGTALK_APP_SECRET")
+    or bot_dotenv.get("DINGTALK_APP_SECRET")
     or find_normalized(secrets, {"dingtalk_app_secret"})
     or find_in_named_section(secrets, "dingtalk", {"app_secret", "appsecret", "secret"})
 )
