@@ -63,7 +63,7 @@
 - Read: `server/src/services/issue-assignment-wakeup.ts:21-48`
 - Read: 任一已实际跑过的 agent 触发链路（Finance / CXOps / DataPlatform 之一），从 `queueIssueAssignmentWakeup → heartbeat.wakeup` 一路追到 agent prompt 实际被发给哪个 LLM provider
 
-- [ ] **Step 1: grep agent 执行路径**
+- [x] **Step 1: grep agent 执行路径**
 
 ```bash
 cd /Users/melodylu/PycharmProjects/paperclip
@@ -72,7 +72,7 @@ grep -rn "function.*runAgent\|function.*executeAgent\|function.*processAgentTurn
 
 记录所有命中行号到 `agent-execution-trace.txt`（临时草稿，不入 git）。
 
-- [ ] **Step 2: 找 LLM provider 调用点**
+- [x] **Step 2: 找 LLM provider 调用点**
 
 ```bash
 grep -rn "anthropic\|@anthropic-ai/sdk\|api.anthropic" server/src/ packages/ | head -20
@@ -81,7 +81,7 @@ grep -rn "openai\|baseURL.*tabcode" server/src/ packages/ | head -20
 
 记录现役 agent 实际用哪个 LLM provider（Claude API / tabcode / 其它）。
 
-- [ ] **Step 3: 写 spec doc**
+- [x] **Step 3: 写 spec doc**
 
 创建 `docs/superpowers/specs/2026-05-25-c1-concierge-spec.md`，至少含：
 1. agent runtime 模型一句话总结（subprocess / in-process worker / 别的）
