@@ -2,7 +2,11 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 from paperclip_rag.ingest import refund_comments_all as orch
-from paperclip_rag.ingest.refund_comments import DEFAULT_LIMIT, DEFAULT_PER_GROUP
+from paperclip_rag.ingest.refund_comments import (
+    DEFAULT_BATCH_SIZE,
+    DEFAULT_LIMIT,
+    DEFAULT_PER_GROUP,
+)
 
 
 def test_discover_accounts_filters_by_pattern():
@@ -33,8 +37,16 @@ def test_run_accounts_isolates_a_failing_account(monkeypatch):
 
     posted: list[tuple[str, int]] = []
 
-    def fake_post(api_base, collection, docs, timeout=14400.0):
+    def fake_post(
+        api_base,
+        collection,
+        docs,
+        timeout=14400.0,
+        batch_size=DEFAULT_BATCH_SIZE,
+        on_batch_success=None,
+    ):
         posted.append((collection, len(docs)))
+        on_batch_success(docs)
         return {"indexed": len(docs)}
 
     monkeypatch.setattr(orch, "_fetch_rows", fake_fetch)
@@ -72,6 +84,59 @@ def test_run_accounts_isolates_a_failing_account(monkeypatch):
     ]
     assert posted == [("refund_comments_v2", 1), ("refund_comments_v2", 1)]
     assert recorded == [1, 1]  # record_manifest fired for US and DE, not UK
+
+
+def test_run_accounts_records_successful_batches_before_post_failure(monkeypatch):
+    monkeypatch.setattr(
+        orch,
+        "_fetch_rows",
+        lambda conn, account, since, sku_prefix, per_group, limit: [
+            {"customerComment": "c1", "sellerSku": "S1", "orderId": "o1"},
+            {"customerComment": "c2", "sellerSku": "S2", "orderId": "o2"},
+            {"customerComment": "c3", "sellerSku": "S3", "orderId": "o3"},
+        ],
+    )
+
+    def fake_post(
+        api_base,
+        collection,
+        docs,
+        timeout=14400.0,
+        batch_size=DEFAULT_BATCH_SIZE,
+        on_batch_success=None,
+    ):
+        assert batch_size == 2
+        on_batch_success(docs[:2])
+        raise RuntimeError("second batch failed")
+
+    monkeypatch.setattr(orch, "post_docs", fake_post)
+    recorded = []
+    monkeypatch.setattr(
+        orch,
+        "record_manifest",
+        lambda manifest, docs: recorded.extend([d["id"] for d in docs]),
+    )
+
+    manifest = MagicMock()
+    manifest.seen.return_value = False
+
+    summary = orch.run_accounts(
+        conn=MagicMock(),
+        accounts=["AmazonEPUS"],
+        since="2026-01-01",
+        per_group=8,
+        limit=500,
+        collection="refund_comments_v2",
+        api_base="http://x",
+        manifest=manifest,
+        dry_run=False,
+        force=False,
+        batch_size=2,
+    )
+
+    assert summary[0]["new_docs"] == 3
+    assert summary[0]["status"].startswith("FAILED")
+    assert recorded == ["EP-US::o1::S1", "EP-US::o2::S2"]
 
 
 def test_run_accounts_dry_run_does_not_post(monkeypatch):
@@ -127,11 +192,14 @@ def test_main_passes_per_group_and_default_hard_limit(monkeypatch):
         "2026-01-01",
         "--per-group",
         "5",
+        "--batch-size",
+        "42",
     ])
 
     assert rc == 0
     assert captured["per_group"] == 5
     assert captured["limit"] == DEFAULT_LIMIT
+    assert captured["batch_size"] == 42
     assert captured["accounts"] == ["AmazonEPUS"]
     conn.close.assert_called_once()
     settings.collection_dir.assert_called_once_with("refund_comments_v2")
@@ -158,3 +226,4 @@ def test_main_uses_default_per_group(monkeypatch):
 
     assert rc == 0
     assert captured["per_group"] == DEFAULT_PER_GROUP
+    assert captured["batch_size"] == DEFAULT_BATCH_SIZE

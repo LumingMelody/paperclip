@@ -13,6 +13,7 @@ Usage:
         [--collection refund_comments_v2] \\
         [--account-pattern 'AmazonEP%'] \\
         [--api-base http://127.0.0.1:9001] \\
+        [--batch-size 300] \\
         [--dry-run] \\
         [--force]
 """
@@ -27,6 +28,7 @@ from loguru import logger
 from ..config import get_settings
 from ..manifest import IngestManifest
 from .refund_comments import (
+    DEFAULT_BATCH_SIZE,
     DEFAULT_LIMIT,
     DEFAULT_PER_GROUP,
     _connect,
@@ -61,6 +63,7 @@ def run_accounts(
     manifest: IngestManifest,
     dry_run: bool,
     force: bool,
+    batch_size: int = DEFAULT_BATCH_SIZE,
 ) -> list[dict[str, Any]]:
     """Ingest each account into `collection`. Per-account failures are isolated.
 
@@ -92,8 +95,16 @@ def run_accounts(
                 entry["status"] = "dry-run"
             else:
                 if new_docs:
-                    post_docs(api_base, collection, new_docs)
-                    record_manifest(manifest, new_docs)
+                    post_docs(
+                        api_base,
+                        collection,
+                        new_docs,
+                        batch_size=batch_size,
+                        on_batch_success=lambda batch_docs: record_manifest(
+                            manifest,
+                            batch_docs,
+                        ),
+                    )
                 entry["status"] = "ok"
         except Exception as e:  # noqa: BLE001 — isolate one account's failure
             logger.error("account {} failed: {}", account, e)
@@ -120,6 +131,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--collection", default="refund_comments_v2")
     parser.add_argument("--account-pattern", default="AmazonEP%")
     parser.add_argument("--api-base", default="http://127.0.0.1:9001")
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=DEFAULT_BATCH_SIZE,
+        help="docs per synchronous /index request",
+    )
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--force", action="store_true", help="bypass manifest skip")
     args = parser.parse_args(argv)
@@ -161,6 +178,7 @@ def main(argv: list[str] | None = None) -> int:
             manifest=manifest,
             dry_run=args.dry_run,
             force=args.force,
+            batch_size=args.batch_size,
         )
     finally:
         conn.close()

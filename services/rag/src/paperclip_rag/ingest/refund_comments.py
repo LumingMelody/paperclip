@@ -15,6 +15,7 @@ Usage:
         [--account ACCOUNT_ID]      # else read PAPERCLIP_RAG_INGEST_ACCOUNT
         [--api-base http://127.0.0.1:9001] \\
         [--collection refund_comments] \\
+        [--batch-size 300] \\
         [--dry-run] \\
         [--force]                    # bypass manifest skip
 """
@@ -26,6 +27,7 @@ import json
 import os
 import re
 import sys
+from collections.abc import Callable
 from typing import Any
 
 import httpx
@@ -41,6 +43,7 @@ _REQUIRED_ENV = ("DWS_DB_HOST", "DWS_DB_USER", "DWS_DB_PASSWORD", "DWS_DB_DATABA
 _ACCOUNT_RE = re.compile(r"^Amazon(EP|PZ|DAMA)([A-Z]{2})$")
 DEFAULT_PER_GROUP = 8
 DEFAULT_LIMIT = 100_000
+DEFAULT_BATCH_SIZE = 300
 
 
 def _connect() -> pymysql.Connection:
@@ -231,22 +234,43 @@ def post_docs(
     collection: str,
     docs: list[dict[str, Any]],
     timeout: float = 14400.0,
+    batch_size: int = DEFAULT_BATCH_SIZE,
+    on_batch_success: Callable[[list[dict[str, Any]]], None] | None = None,
 ) -> dict[str, Any]:
-    """POST docs to the RAG /index endpoint. Raises RuntimeError on any
-    failure — HTTP >= 300 or a network/connection error.
+    """POST docs to the RAG /index endpoint in serial batches.
+
+    Raises RuntimeError on any failure — HTTP >= 300 or a network/connection
+    error. Batches that completed before a later failure remain indexed; callers
+    can use on_batch_success(batch_docs) to persist per-batch side effects such
+    as manifest records.
 
     The 4h timeout matches synchronous LightRAG ingest of large batches —
     a premature ReadTimeout would leave the manifest unwritten.
     """
-    payload = {"collection": collection, "docs": docs, "upsert": True}
+    if batch_size <= 0:
+        raise ValueError("batch_size must be > 0")
+    if not docs:
+        return {"indexed": 0, "batches": 0}
+
+    total_indexed = 0
+    batch_count = 0
+    last_result: dict[str, Any] = {}
     try:
         with httpx.Client(timeout=timeout) as client:
-            resp = client.post(f"{api_base}/index", json=payload)
+            for start in range(0, len(docs), batch_size):
+                batch_docs = docs[start:start + batch_size]
+                payload = {"collection": collection, "docs": batch_docs, "upsert": True}
+                resp = client.post(f"{api_base}/index", json=payload)
+                if resp.status_code >= 300:
+                    raise RuntimeError(f"ingest failed: {resp.status_code} {resp.text}")
+                last_result = resp.json()
+                total_indexed += int(last_result.get("indexed", 0))
+                batch_count += 1
+                if on_batch_success is not None:
+                    on_batch_success(batch_docs)
     except httpx.HTTPError as e:
         raise RuntimeError(f"ingest request failed: {e}") from e
-    if resp.status_code >= 300:
-        raise RuntimeError(f"ingest failed: {resp.status_code} {resp.text}")
-    return resp.json()
+    return {**last_result, "indexed": total_indexed, "batches": batch_count}
 
 
 def record_manifest(manifest: IngestManifest, docs: list[dict[str, Any]]) -> None:
@@ -274,6 +298,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--account", default=os.environ.get("PAPERCLIP_RAG_INGEST_ACCOUNT"))
     parser.add_argument("--api-base", default="http://127.0.0.1:9001")
     parser.add_argument("--collection", default="refund_comments")
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=DEFAULT_BATCH_SIZE,
+        help="docs per synchronous /index request",
+    )
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--force", action="store_true", help="bypass manifest skip")
     args = parser.parse_args(argv)
@@ -332,11 +362,16 @@ def main(argv: list[str] | None = None) -> int:
 
     logger.info("POSTing {} docs to {}/index", len(new_docs), args.api_base)
     try:
-        result = post_docs(args.api_base, args.collection, new_docs)
+        result = post_docs(
+            args.api_base,
+            args.collection,
+            new_docs,
+            batch_size=args.batch_size,
+            on_batch_success=lambda batch_docs: record_manifest(manifest, batch_docs),
+        )
     except RuntimeError as e:
         logger.error("{}", e)
         return 1
-    record_manifest(manifest, new_docs)
     logger.info("ingested: {}", result)
     return 0
 
