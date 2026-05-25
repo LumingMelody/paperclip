@@ -489,7 +489,7 @@ curl -s -XPOST http://127.0.0.1:3100/api/chat -H 'content-type: application/json
 - Create: `paperclip-dingtalk-bot/concierge_client.py`
 - Test: `paperclip-dingtalk-bot/tests/test_concierge_client.py`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试** (6 case, 含 get_latest_answer 跳过 sender comment 逻辑 — 实际答案是 local-board user 写的而非 Concierge agent)
 
 ```python
 import httpx
@@ -544,21 +544,14 @@ async def test_get_latest_concierge_comment():
     assert answer == "答案 markdown ..."
 ```
 
-- [ ] **Step 2: 跑测试确认 FAIL**
-
-```bash
-cd ~/PycharmProjects/paperclip-dingtalk-bot
-uv run pytest tests/test_concierge_client.py -q
-```
-
-预期：`ModuleNotFoundError: No module named 'concierge_client'`。
+- [x] **Step 2: 跑测试确认 FAIL** (`ModuleNotFoundError: No module named 'respx'` — 补 dev dep)
 
 ### Task 3.2: 实现 concierge_client
 
 **Files:**
 - Create: `paperclip-dingtalk-bot/concierge_client.py`
 
-- [ ] **Step 1: 写实现**
+- [x] **Step 1: 写实现** (concierge_client.py)
 
 ```python
 """HTTP client for paperclip Concierge chat flow."""
@@ -619,7 +612,7 @@ class ConciergeClient:
             return None
 ```
 
-- [ ] **Step 2: 跑测试确认 PASS**
+- [x] **Step 2: 跑测试确认 PASS** (6/0)
 
 ```bash
 uv run pytest tests/test_concierge_client.py -q
@@ -627,7 +620,7 @@ uv run pytest tests/test_concierge_client.py -q
 
 预期：4 个 case 全 pass。
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit** (concierge_client + worker batched into one commit)
 
 ```bash
 git add concierge_client.py tests/test_concierge_client.py
@@ -640,7 +633,7 @@ git commit -m "feat(bot): concierge http client (post_chat + issue/comments poll
 - Create: `paperclip-dingtalk-bot/poll_worker.py`
 - Test: `paperclip-dingtalk-bot/tests/test_poll_worker.py`
 
-- [ ] **Step 1: 写测试**
+- [x] **Step 1: 写测试** (3 case: done/timeout/cancelled)
 
 ```python
 import asyncio
@@ -682,13 +675,9 @@ async def test_poll_timeout_raises():
         await poll_until_done(client, issue_id="x", interval=0.01, timeout=0.05)
 ```
 
-- [ ] **Step 2: 跑测试确认 FAIL**
+- [x] **Step 2: 跑测试确认 FAIL** (`Cannot find module poll_worker`)
 
-```bash
-uv run pytest tests/test_poll_worker.py -q
-```
-
-- [ ] **Step 3: 写实现**
+- [x] **Step 3: 写实现** (poll_worker.py — 5s interval / 5min timeout MVP)
 
 ```python
 """Background poll worker: watches issue → done → fetches latest Concierge comment."""
@@ -722,13 +711,9 @@ async def poll_until_done(client: ConciergeClient, issue_id: str,
     raise PollTimeout(f"issue {issue_id} not done after {timeout}s")
 ```
 
-- [ ] **Step 4: 跑测试确认 PASS**
+- [x] **Step 4: 跑测试确认 PASS** (3/0; combined 9/0 with client tests)
 
-```bash
-uv run pytest tests/test_poll_worker.py -q
-```
-
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit** (batched with client into single commit)
 
 ```bash
 git add poll_worker.py tests/test_poll_worker.py
@@ -741,7 +726,7 @@ git commit -m "feat(bot): poll worker — wait for issue done + extract concierg
 - Modify: `paperclip-dingtalk-bot/main.py`
 - Modify: `paperclip-dingtalk-bot/config.py`
 
-- [ ] **Step 1: 读 config.py 加新配置项**
+- [x] **Step 1: 读 config.py 加新配置项** (PAPERCLIP_BASE_URL / PAPERCLIP_CONCIERGE_AGENT_ID / CONCIERGE_ROUTE_ENABLED / 轮询 interval+timeout)
 
 在 `config.py` 加：
 
@@ -755,7 +740,7 @@ PAPERCLIP_CONCIERGE_AGENT_ID = os.environ.get("PAPERCLIP_CONCIERGE_AGENT_ID", ""
 CONCIERGE_ROUTE_ENABLED = os.environ.get("CONCIERGE_ROUTE_ENABLED", "true").lower() == "true"
 ```
 
-- [ ] **Step 2: 改 main.py 的 dispatch 路径**
+- [x] **Step 2: 改 main.py 的 dispatch 路径** (_concierge_followup 新函数 + 路由分发挑选 followup callable)
 
 找到 main.py 里 ChatbotMessage 处理入口（之前那段 "incoming: '...'" 的 log 出现的地方），把"调 llm_dispatcher.dispatch"那条路径改成：
 
@@ -803,7 +788,7 @@ async def _fallback_dispatcher(msg, text, sender):
 
 注：`reply_markdown` / `active_push` 用 main.py 现有的 helper（dingtalk-stream SDK）。
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit** (PAPERCLIP_BASE_URL + Concierge routing + fallback)
 
 ```bash
 git add main.py config.py
@@ -819,7 +804,7 @@ ConciergeUnavailable / PollTimeout 自动降级到 llm_dispatcher。"
 
 ### Task 4.1: 配 .env 启动 bot + server
 
-- [ ] **Step 1: 改 bot .env**
+- [x] **Step 1: 改 bot .env** (PAPERCLIP_BASE_URL + PAPERCLIP_CONCIERGE_AGENT_ID=40560fc7... + CONCIERGE_ROUTE_ENABLED=true)
 
 ```bash
 cd ~/PycharmProjects/paperclip-dingtalk-bot
@@ -834,13 +819,13 @@ CONCIERGE_ROUTE_ENABLED=true
 EOF
 ```
 
-- [ ] **Step 2: 重启 bot（用之前的 launchctl kickstart）**
+- [x] **Step 2: 重启 bot** (launchctl kickstart -k；单进程 47488，purged 1 conversation 后干净重启)
 
 ```bash
 launchctl kickstart -k gui/$(id -u)/com.everpretty.dingtalk-bot
 ```
 
-- [ ] **Step 3: 确认 paperclip server 在跑且 PAPERCLIP_CONCIERGE_AGENT_ID 已 export**
+- [x] **Step 3: 确认 paperclip server 在跑** (PID 36620, env var 已通过 plist 注入)
 
 ```bash
 curl -s http://127.0.0.1:3100/api/healthz | head
