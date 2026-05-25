@@ -1,0 +1,2 @@
+ALTER TABLE "issues" ADD COLUMN "dingtalk_conversation_key" text;--> statement-breakpoint
+CREATE INDEX "issues_dingtalk_conv_key_status_idx" ON "issues" USING btree ("company_id","dingtalk_conversation_key","status");

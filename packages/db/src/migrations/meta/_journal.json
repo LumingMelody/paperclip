@@ -533,6 +533,13 @@
       "when": 1778469077894,
       "tag": "0075_giant_lorna_dane",
       "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "7",
+      "when": 1779701451088,
+      "tag": "0076_first_blink",
+      "breakpoints": true
     }
   ]
 }
