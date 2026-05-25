@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.everpretty.paperclip-rag-ingest</string>
+
+	<key>ProgramArguments</key>
+	<array>
+		<string>/Users/melodylu/PycharmProjects/paperclip/services/rag/scripts/cron_ingest.sh</string>
+	</array>
+
+	<key>WorkingDirectory</key>
+	<string>/Users/melodylu/PycharmProjects/paperclip/services/rag</string>
+
+	<key>StartCalendarInterval</key>
+	<dict>
+		<key>Hour</key>
+		<integer>4</integer>
+		<key>Minute</key>
+		<integer>0</integer>
+	</dict>
+
+	<key>RunAtLoad</key>
+	<false/>
+
+	<key>StandardOutPath</key>
+	<string>/Users/melodylu/.paperclip/logs/rag-ingest.out.log</string>
+	<key>StandardErrorPath</key>
+	<string>/Users/melodylu/.paperclip/logs/rag-ingest.err.log</string>
+
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>HOME</key>
+		<string>/Users/melodylu</string>
+		<key>LANG</key>
+		<string>en_US.UTF-8</string>
+		<key>PATH</key>
+		<string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+		<!-- Bypass macOS system proxy (Clash etc.) so httpx in the ingest
+		     reaches the RAG service at 127.0.0.1:9001 directly.
+		     Without this, launchd-context Python picks up the system
+		     network proxy and POST /index returns 502 from the proxy. -->
+		<key>NO_PROXY</key>
+		<string>*</string>
+		<key>no_proxy</key>
+		<string>*</string>
+	</dict>
+</dict>
+</plist>
