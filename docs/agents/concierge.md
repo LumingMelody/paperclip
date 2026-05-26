@@ -11,15 +11,16 @@
 Concierge 是 paperclip 平台与外部对话入口（钉钉群 / 未来其它渠道）之间的**唯一桥梁 agent**。它负责：
 
 1. 接收 chat issue（由 `chatService` 创建/复用），读 user comments 作上下文
-2. 用 22 个工具直接回答业务问题（v1）；未来 v2 派 sub-issue 给业务 agent (Finance/ProductSizing/...)
+2. 用 23 个工具直接回答业务问题（v1）；未来 v2 派 sub-issue 给业务 agent (Finance/ProductSizing/...)
 3. 把最终 markdown 答案写入 `issue_comments`（`author_agent_id = Concierge UUID`）
 4. 设 `issue.status = "done"` —— 这是 bot 端短轮询拉答案的信号
 
-## Tool Whitelist (22)
+## Tool Whitelist (23)
 
 ```
 lingxing.factSku
 lingxing.factOrders
+lingxing.styleSummary
 lingxing.topSkus
 lingxing.stockoutRisk
 
@@ -88,15 +89,22 @@ admin.registry.list
 - 「列出 SKU=X 某日期范围所有退货」「按 quantity > N 过滤」这种**结构化过滤**走 `dws.refundComments`
 - ⚠️ **跟进轮也要重查 RAG**：开放式抱怨问题即使历史有该 SKU dws 数据，本轮也必须重调 `rag.searchRefundComments`。历史里「近 N 天退货 = 0」只说明退了多少，替代不了「为什么退」的语义结论。
 
-### 单 SKU 退货率分母怎么取（重要）
+### 款号 / ASIN / 排行榜退货率分母怎么取（重要）
 
-算"某款 SKU 的退货率 = returnCount / orderQty"时，**永远用 `lingxing.factSku`** 拿这个 SKU 自己的销量和退货数 —— 它对全量 SKU 都返回数据。
+用户给 `EE02559` 这种款号 / style code / SKU 前缀时，算退货率首选 **`lingxing.styleSummary`**。它按 `shop + stylePrefix + since` 查 `seller SKU LIKE stylePrefix%`，跨颜色 / 尺码 / ASIN 变体聚合 `orderQty / returnCount / gmvLocal`，并返回 top 20 变体明细（sku / asin / orderQty / returnCount / returnRate），适合回答「EE02559 过去 30 天退货率」「XL 码退货最高吗」「Black 色退货占多少」。
 
-**不要用 `lingxing.topSkus` 当分母来源** —— 它按 GMV 排序后 `LIMIT N`（默认 top 100），非畅销款会返回空，让你误以为"没销量分母"。`topSkus` 只在问"哪些款是畅销 + 退货高"这种排行榜场景才用。
+三个 Lingxing 销售工具边界：
+
+| 工具 | 输入 | 适用场景 | 不适用 |
+|------|------|----------|--------|
+| `lingxing.styleSummary` | `stylePrefix + shop + since` | 款号 / style code 退货率；跨变体聚合销量与退货；下钻颜色 / 尺码变体 | 精确 ASIN 商品事实 |
+| `lingxing.factSku` | `asin`（B0XXXXXXXX） | 用户给 Amazon ASIN，要查单个 ASIN 的 Lingxing SKU facts | 用户给款号（如 EE02559）时不要硬塞进 asin |
+| `lingxing.topSkus` | `shop + since + top` | 畅销榜 / Top N 里谁退货高 | 非畅销款退货率分母；它按 GMV 排序 `LIMIT N`，非榜单款会返回空 |
 
 正确口径示例：
-- 用户问「EE02559 过去 30 天退货率」→ `lingxing.factSku(asin=EE02559)` 拿 orderQty + returnCount → 直接算
-- 用户问「EP-US Top 20 畅销款里退货率最高的 5 款」→ `lingxing.topSkus` 拿 top 列表 + returnCount 比例
+- 用户问「EE02559 过去 30 天退货率」→ `lingxing.styleSummary(stylePrefix="EE02559", shop="EP-US", since=具体日期)`，用返回的 `returnRate`；如果 `orderQty=0`，退货率显示为 `null/无销量分母`，不要写 0%
+- 用户问「B01N9G3JK7 这个 ASIN 退货情况」→ `lingxing.factSku(asin="B01N9G3JK7")`
+- 用户问「EP-US Top 20 畅销款里退货率最高的 5 款」→ `lingxing.topSkus` 拿 top 列表，按 `returnCount / orderQty` 排序
 
 ## RAG vs DWS 顾客原话 — 怎么选
 

@@ -152,6 +152,64 @@ def fact_orders(conn, sku_id: str, since: str) -> list[dict[str, Any]]:
     return [serialize_row(row) for row in rows]
 
 
+def return_rate(return_count: Any, order_qty: Any) -> float | None:
+    if order_qty in (None, 0):
+        return None
+    return float(return_count or 0) / float(order_qty)
+
+
+def style_summary(conn, style_prefix: str, shop_name: str, since: str) -> dict[str, Any] | None:
+    summary_sql = """
+        SELECT
+            SUM(COALESCE(m.volume, 0)) AS orderQty,
+            SUM(COALESCE(m.return_count, 0)) AS returnCount,
+            SUM(COALESCE(m.amount, 0)) AS gmvLocal,
+            COUNT(DISTINCT m.sku) AS variantCount,
+            COUNT(DISTINCT m.asin) AS asinCount,
+            MIN(m.start_date) AS firstSeen,
+            MAX(m.end_date) AS lastSeen,
+            GROUP_CONCAT(DISTINCT m.asin ORDER BY m.asin SEPARATOR ',') AS asinsCsv
+        FROM lx_product_msku m
+        WHERE m.shop_name = %s
+          AND m.sku LIKE CONCAT(%s, '%%')
+          AND m.start_date >= %s
+    """
+    variants_sql = """
+        SELECT
+            m.sku AS sku,
+            m.asin AS asin,
+            SUM(COALESCE(m.volume, 0)) AS orderQty,
+            SUM(COALESCE(m.return_count, 0)) AS returnCount
+        FROM lx_product_msku m
+        WHERE m.shop_name = %s
+          AND m.sku LIKE CONCAT(%s, '%%')
+          AND m.start_date >= %s
+        GROUP BY m.sku, m.asin
+        ORDER BY orderQty DESC
+        LIMIT 20
+    """
+    with conn.cursor() as cur:
+        cur.execute(summary_sql, (shop_name, style_prefix, since))
+        summary = cur.fetchone()
+        if not summary or int(summary.get("variantCount") or 0) == 0:
+            return None
+        cur.execute(variants_sql, (shop_name, style_prefix, since))
+        variants = cur.fetchall()
+
+    row = serialize_row(summary)
+    asins_csv = row.pop("asinsCsv", None)
+    row["asins"] = [asin for asin in str(asins_csv or "").split(",") if asin]
+    row["returnRate"] = return_rate(row.get("returnCount"), row.get("orderQty"))
+    row["variants"] = [
+        {
+            **serialize_row(variant),
+            "returnRate": return_rate(variant.get("returnCount"), variant.get("orderQty")),
+        }
+        for variant in variants
+    ]
+    return row
+
+
 def top_skus(conn, shop_name: str, since: str, top: int) -> list[dict[str, Any]]:
     sql = """
         SELECT
@@ -229,6 +287,13 @@ def main() -> None:
                 if not isinstance(sku_id, str) or not isinstance(since, str):
                     emit({"error": "ValidationError", "message": "factOrders requires skuId and since"}, 1)
                 emit({"rows": fact_orders(conn, sku_id, since)})
+            if op == "styleSummary":
+                style_prefix = request.get("stylePrefix")
+                shop = request.get("shop")
+                since = request.get("since")
+                if not isinstance(style_prefix, str) or not isinstance(shop, str) or not isinstance(since, str):
+                    emit({"error": "ValidationError", "message": "styleSummary requires stylePrefix, shop and since"}, 1)
+                emit({"row": style_summary(conn, style_prefix, shop, since)})
             if op == "topSkus":
                 shop = request.get("shop")
                 since = request.get("since")

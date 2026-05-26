@@ -6,6 +6,7 @@ import { decisionsSearchDescriptor } from "./tools/admin/decisionsSearch.js";
 import { registryListDescriptor } from "./tools/admin/registryList.js";
 import { factOrdersDescriptor } from "./tools/lingxing/factOrders.js";
 import { factSkuDescriptor } from "./tools/lingxing/factSku.js";
+import { styleSummaryDescriptor } from "./tools/lingxing/styleSummary.js";
 import { stockoutRiskDescriptor } from "./tools/lingxing/stockoutRisk.js";
 import { topSkusDescriptor } from "./tools/lingxing/topSkus.js";
 import { returnReasonsDescriptor } from "./tools/dws/returnReasons.js";
@@ -45,6 +46,7 @@ export interface ToolDescriptor<I = unknown, O = unknown> {
 export const tools: ToolDescriptor[] = [
   factSkuDescriptor,
   factOrdersDescriptor,
+  styleSummaryDescriptor,
   topSkusDescriptor,
   stockoutRiskDescriptor,
   returnReasonsDescriptor,

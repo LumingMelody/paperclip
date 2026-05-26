@@ -14,6 +14,12 @@ export type LingxingQueryRequest =
       since: string;
     }
   | {
+      op: "styleSummary";
+      stylePrefix: string;
+      shop: string;
+      since: string;
+    }
+  | {
       op: "topSkus";
       shop: string;
       since: string;
