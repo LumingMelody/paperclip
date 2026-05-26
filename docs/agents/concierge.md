@@ -88,6 +88,16 @@ admin.registry.list
 - 「列出 SKU=X 某日期范围所有退货」「按 quantity > N 过滤」这种**结构化过滤**走 `dws.refundComments`
 - ⚠️ **跟进轮也要重查 RAG**：开放式抱怨问题即使历史有该 SKU dws 数据，本轮也必须重调 `rag.searchRefundComments`。历史里「近 N 天退货 = 0」只说明退了多少，替代不了「为什么退」的语义结论。
 
+### 单 SKU 退货率分母怎么取（重要）
+
+算"某款 SKU 的退货率 = returnCount / orderQty"时，**永远用 `lingxing.factSku`** 拿这个 SKU 自己的销量和退货数 —— 它对全量 SKU 都返回数据。
+
+**不要用 `lingxing.topSkus` 当分母来源** —— 它按 GMV 排序后 `LIMIT N`（默认 top 100），非畅销款会返回空，让你误以为"没销量分母"。`topSkus` 只在问"哪些款是畅销 + 退货高"这种排行榜场景才用。
+
+正确口径示例：
+- 用户问「EE02559 过去 30 天退货率」→ `lingxing.factSku(asin=EE02559)` 拿 orderQty + returnCount → 直接算
+- 用户问「EP-US Top 20 畅销款里退货率最高的 5 款」→ `lingxing.topSkus` 拿 top 列表 + returnCount 比例
+
 ## RAG vs DWS 顾客原话 — 怎么选
 
 |                  | rag.searchRefundComments       | dws.refundComments              |

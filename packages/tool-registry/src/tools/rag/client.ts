@@ -1,5 +1,5 @@
 const DEFAULT_BASE = "http://127.0.0.1:9001";
-const TIMEOUT_MS = 30_000;
+const TIMEOUT_MS = 60_000;
 
 export class RagUnavailable extends Error {}
 
