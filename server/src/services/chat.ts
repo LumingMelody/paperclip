@@ -67,10 +67,18 @@ export function chatService(deps: ChatServiceDeps) {
 
       let issueId: string;
       let created: boolean;
+      // effectiveAgentId: the agent to wake up after attaching the comment.
+      // For new issues: targetAgentId if provided, else Concierge (default routing).
+      // For existing issues: the existing assignee (preserves ongoing conversation ownership).
+      let effectiveAgentId: string;
+
       if (recent.length > 0) {
-        issueId = (recent[0] as { id: string }).id;
+        const existing = recent[0] as { id: string; assigneeAgentId?: string | null };
+        issueId = existing.id;
         created = false;
+        effectiveAgentId = existing.assigneeAgentId ?? deps.conciergeAgentId;
       } else {
+        effectiveAgentId = input.targetAgentId ?? deps.conciergeAgentId;
         const inserted = await deps.db
           .insert(issues)
           .values({
@@ -78,7 +86,7 @@ export function chatService(deps: ChatServiceDeps) {
             projectId: input.projectId,
             title: input.text.slice(0, 80),
             description: input.text,
-            assigneeAgentId: input.targetAgentId ?? deps.conciergeAgentId,
+            assigneeAgentId: effectiveAgentId,
             status: "todo",
             dingtalkConversationKey: convKey,
           } as typeof issues.$inferInsert)
@@ -95,13 +103,13 @@ export function chatService(deps: ChatServiceDeps) {
         body: input.text,
       } as typeof issueComments.$inferInsert);
 
-      // 3) 触发 Concierge 唤醒
+      // 3) 触发 assignee 唤醒（无 targetAgentId 时默认 Concierge）
       const wakeupFn = deps.wakeup ?? queueIssueAssignmentWakeup;
       await wakeupFn({
         heartbeat: deps.heartbeat as never,
         issue: {
           id: issueId,
-          assigneeAgentId: deps.conciergeAgentId,
+          assigneeAgentId: effectiveAgentId,
           status: "todo",
         },
         reason: created ? "new chat session" : "user follow-up",
