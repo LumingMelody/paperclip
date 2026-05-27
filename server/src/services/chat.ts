@@ -31,6 +31,8 @@ export interface ChatHandleInput {
   senderKey: string;
   /** Explicit override; default = senderKey. */
   conversationKey?: string;
+  /** Target agent UUID; default = deps.conciergeAgentId. Phase 6 multi-channel routing. */
+  targetAgentId?: string;
   /** User message text (raw). */
   text: string;
 }
@@ -76,7 +78,7 @@ export function chatService(deps: ChatServiceDeps) {
             projectId: input.projectId,
             title: input.text.slice(0, 80),
             description: input.text,
-            assigneeAgentId: deps.conciergeAgentId,
+            assigneeAgentId: input.targetAgentId ?? deps.conciergeAgentId,
             status: "todo",
             dingtalkConversationKey: convKey,
           } as typeof issues.$inferInsert)

@@ -25,6 +25,7 @@ const chatRequestSchema = z.object({
   projectId: z.string().min(1),
   senderKey: z.string().min(1),
   conversationKey: z.string().optional(),
+  targetAgentId: z.string().uuid().optional(),
   text: z.string().min(1).max(4000),
 });
 
