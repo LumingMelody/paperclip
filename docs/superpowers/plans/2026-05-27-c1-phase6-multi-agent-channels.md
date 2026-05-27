@@ -229,24 +229,45 @@ paperclip 仓库（这边）/docs/
 
 ### Task 3.1: stop 旧单进程 bot + start 新 launchd 7-plist 套件
 
-- [ ] **Step 1: 用 install script 一键切换**
-  - `bash paperclip-dingtalk-bot/scripts/install-launchd-plists.sh`
-  - 此时只有 `.env.concierge` 存在 → 只会起 1 个 bot 进程 (com.everpretty.dingtalk-bot-concierge)
-  - 其它 6 个 plist 装上但 .env 缺，run-channel.sh 检测后 exit 0 skip
+- [x] **Step 1: 用 install script 一键切换**
+  - Ran `bash paperclip-dingtalk-bot/scripts/install-launchd-plists.sh`. Legacy
+    `com.everpretty.dingtalk-bot` plist booted out + archived to
+    `~/Library/LaunchAgents/com.everpretty.dingtalk-bot.plist.phase6-archived-20260527180611`.
+    New `com.everpretty.dingtalk-bot-concierge` bootstrapped; 6 business
+    channels skipped (no .env files yet — that's Phase 4 user work).
+  - Refined design vs original plan: install script SKIPS unprovisioned
+    channels rather than installing all 7 plists. Plists for finance/supply/
+    etc. only land after user creates `.env.<channel>` (Phase 4 onboarding).
+    Avoids 6 launchd labels crash-looping with EX_CONFIG.
 
-- [ ] **Step 2: ps -ef 验证只有 concierge bot 进程在跑** + lsof 无端口冲突 + DingTalk Stream 连上
+- [x] **Step 2: ps -ef 验证只有 concierge bot 进程在跑** + lsof 无端口冲突 + DingTalk Stream 连上
+  - `launchctl list | grep dingtalk-bot` → exactly one label, PID 88628.
+  - `ps -ef | grep main.py | grep paperclip` → exactly one process (PID 88628).
+  - bot-concierge.err.log shows: `active_push enabled` + `starting bot — channel=concierge`
+    + Stream `open connection` with new ticket. State: running, "last exit code = (never exited)".
 
 - [ ] **Step 3: 钉钉群 @bot 跑一个原 Phase 5 都通过的复合问题** (e.g. EG02084 怎么办 — 已预热)
   - 期望: Concierge 派 3 sub-issue → Finance/ProductSizing/Supply 答 → 聚合 → push 回群
   - 验证: 行为跟 Phase 5 一致；唯一差别是 reply 路径用 active push 不是 reply_markdown
+  - **autoloop-deferred** — needs human @-mention in the DingTalk group;
+    autoloop cannot dogfood without a user posting the question.
 
 ### Task 3.2: 故意把 .env.concierge 删一个字段 验证启动 pre-flight
 
-- [ ] **Step 1: 临时备份 `.env.concierge` → 删 `PAPERCLIP_CONCIERGE_AGENT_ID`**
+- [x] **Step 1: 临时备份 `.env.concierge` → 删 `DINGTALK_APP_KEY`**
+  - (Used DINGTALK_APP_KEY instead of PAPERCLIP_CONCIERGE_AGENT_ID — APP_KEY
+    is in run-channel.sh's preflight `required_keys` list, the more direct
+    test of the preflight gate.)
 
-- [ ] **Step 2: `launchctl kickstart` concierge plist → 期望 run-channel.sh exit 1 + plist standby**
+- [x] **Step 2: `launchctl kickstart` concierge plist → 期望 run-channel.sh exit 1 + plist standby**
+  - Observed: `last exit code = 78: EX_CONFIG`, state = "spawn scheduled"
+    (KeepAlive will retry on ThrottleInterval but won't infinite-spin).
+    bot-concierge.err.log captured exact line: `[run-channel.sh]
+    /Users/.../.env.concierge missing or empty required key: DINGTALK_APP_KEY`.
 
-- [ ] **Step 3: 还原字段 → kickstart → 期望恢复正常**
+- [x] **Step 3: 还原字段 → kickstart → 期望恢复正常**
+  - `mv .env.concierge.bak.preflight-test .env.concierge` + kickstart →
+    state = running, pid = 89216, Stream socket reconnected with fresh ticket.
 
 ---
 
