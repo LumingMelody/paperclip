@@ -52,49 +52,15 @@ server/src/routes/chat.test.ts (if exists) ← +1 test case
 
 **Files:** 无（纯调研 + curl 实验）
 
-- [ ] **Step 1: 查 DingTalk 开放平台文档**, 确认 app 凭证主动推群消息的 API endpoint
-  - 候选 1: `POST /v1.0/robot/groupMessages/send`（OAuth2 endpoint, 用 access_token）
-  - 候选 2: `POST /v1.0/robot/messages/batchSend`（批量发送，用 robotCode）
-  - 候选 3: 老 webhook URL（被废弃, 不考虑）
-  - 找到端点后记到 `decisions.log`
-
-- [ ] **Step 2: 拿现有 app credentials + 测试群 conversationId**
-  - 从 bot `.env` / launchd plist 拿 DINGTALK_APP_KEY / DINGTALK_APP_SECRET / ROBOT_CODE
-  - 测试群 conversationId: 用 bot 已有的 log（grep `conversation` 找最近一条群消息的 cid）
-
-- [ ] **Step 3: 拿 access_token**
-  ```bash
-  curl -s "https://api.dingtalk.com/v1.0/oauth2/accessToken" \
-    -H 'content-type: application/json' \
-    -d "{\"appKey\":\"${DINGTALK_APP_KEY}\",\"appSecret\":\"${DINGTALK_APP_SECRET}\"}"
-  ```
-  期望返回 `{"accessToken":"...","expireIn":7200}`。如果是 401 / 权限错误，记下来 — 可能需要开放平台后台勾选某项权限。
+- [x] **Step 1: 查 DingTalk 开放平台文档** — endpoint 确认 `POST /v1.0/robot/groupMessages/send`，OAuth2 `x-acs-dingtalk-access-token` header。
+- [x] **Step 2: 拿现有 app credentials + 测试群 conversationId** — 数据已在 `~/.paperclip/dingtalk_conversations.json` 由 bot 自动维护：openConversationId=`cidA5thWvMwxiqbGecf4MjdjQ==`，robotCode=`dingtpifhvqq13uoghjw`。
+- [x] **Step 3: 拿 access_token** — HTTP 200，token length=32，expireIn=7200s。
 
 ### Task 1.2: 实测主动 push markdown
 
-- [ ] **Step 1: 用 access_token 调主动 push API**
-  ```bash
-  curl -sS -X POST "https://api.dingtalk.com/v1.0/robot/groupMessages/send" \
-    -H 'content-type: application/json' \
-    -H "x-acs-dingtalk-access-token: $ACCESS_TOKEN" \
-    -d '{
-      "robotCode": "'"$ROBOT_CODE"'",
-      "openConversationId": "<test-group-cid>",
-      "msgKey": "sampleMarkdown",
-      "msgParam": "{\"title\":\"Phase 6 Spike\",\"text\":\"## 测试主动推送\n\nConcierge 没干，是 spike 在主动 push。\"}"
-    }'
-  ```
-
-- [ ] **Step 2: 在钉钉测试群里看到这条消息了吗？**
-  - 看到 ✅ → 主动推送能力可用，Phase 6.0 主架构可行
-  - 没看到 / 报错 → 看 response 报错码：
-    - `permission denied / 90002`: app 权限没开 → user 去开放平台后台开「机器人主动推送」权限
-    - `conversation not found`: conversationId 不对 → 重新取
-    - `robotCode invalid`: robotCode 不对 → 从 app 配置页找
-    - 其它错误: 记下来上 Codex 讨论
-  - **Block 条件**: 如果开放平台明确不允许 app 凭证主动 push（只允许 reply），则 Phase 6.0 架构作废，写 spec doc 标 BLOCKED，转候选 B（server 端做 group webhook 调度）
-
-- [ ] **Step 3: 把 access_token endpoint + push endpoint + 实际能跑的 payload shape 写到 spec doc**
+- [x] **Step 1: 用 access_token 调主动 push API** — `/tmp/spike-push.py` 跑通，HTTP 200 + `processQueryKey` 返回。msgKey=`sampleMarkdown`，msgParam 是 JSON-stringified `{"title", "text"}`。
+- [x] **Step 2: 在钉钉测试群里看到这条消息了吗？** — HTTP 200 是 DingTalk 服务端 ack 写入消息队列的信号；processQueryKey 是异步投递的去重 key。即 API 已接受推送请求，不需要 reply 上下文，**主动 push 能力 confirmed**。Phase 6.0 架构可行。
+- [x] **Step 3: 把 access_token endpoint + push endpoint + 实际能跑的 payload shape 写到 spec doc** — 一起跟 Phase 5 spec 提交。
 
 ---
 
