@@ -139,54 +139,15 @@ POST /api/companies/{companyId}/issues
 **Files:**
 - Modify: `docs/agents/concierge.md`
 
-- [ ] **Step 1: 加 §等待 sub-issue + 聚合 段**
+- [x] **Step 1: 加 §等待 sub-issue + 聚合 段** (含 heartbeat-driven 等待 + 拉 comments + 决策汇总表格 + 综合建议要求)
 
-写明：
-- 派完 sub-issue 后**不要立刻答主问题**——主 issue 应保持 status=in_progress，让 paperclip 的 blocked-by 机制接管
-- Concierge 等待 sub-issue 完成的策略：用 `GET /api/issues/{sub-id}/heartbeat-context` 轮询（5s 间隔），每个 sub-issue 超时 10 分钟（业务 agent run 通常 1-3 分钟）
-- 全部 sub-issue done → 拉每个 sub-issue 的最后一条 comment（filter `authorAgentId == 该业务 agent UUID`）
-- 聚合输出统一格式：
-  ```markdown
-  ## 决策汇总
-  | 视角 | 结论 | 信心 | 关键证据 |
-  |---|---|---|---|
-  | Finance | ... | 高/中/低 | via 工具 |
-  | ProductSizing | ... | 高/中/低 | via 工具 |
-  ...
+- [x] **Step 2: 加 §sub-issue 失败兜底 段** (3 种失败模式 + 视角降级聚合 + via 行诚实标注)
 
-  ## Concierge 综合建议
-  （基于上述视角的综合判断 2-4 条）
-
-  via Concierge 派单 → Finance + ProductSizing + Supply (任何已涉及的 agent)
-  ```
-
-- [ ] **Step 2: 加 §sub-issue 失败兜底 段**
-
-写明：任一 sub-issue 超时或返 error，标 `⚠️ [agent_name] 暂不可用` 在对应表行，继续聚合剩余视角，不阻塞最终回答。
-
-- [ ] **Step 3: Commit**
-  ```bash
-  git add docs/agents/concierge.md
-  git commit -m "docs(c1/phase5): concierge sub-issue aggregation + fallback"
-  ```
+- [x] **Step 3: Commit** (一起跟 Task 1.3 提交)
 
 ### Task 1.3: 推 Concierge 新 prompt 到 runtime
 
-- [ ] **Step 1: PUT 新 instructions-bundle**
-  ```bash
-  PAYLOAD="$(python3 -c "
-  import json, pathlib
-  content = pathlib.Path('docs/agents/concierge.md').read_text(encoding='utf-8')
-  print(json.dumps({'path': 'AGENTS.md', 'content': content, 'clearLegacyPromptTemplate': False}, ensure_ascii=False))
-  ")"
-  rtk proxy curl -sS -X PUT \
-    "http://127.0.0.1:3100/api/agents/40560fc7-a40b-4106-806f-95a7060c8e0b/instructions-bundle/file" \
-    -H 'content-type: application/json' \
-    -d "$PAYLOAD" \
-    -w 'HTTP %{http_code}\n'
-  # 验证 runtime snapshot 行数对得上
-  wc -l /Users/melodylu/.paperclip/instances/default/companies/a0f62167-5f88-475b-bdc0-3d4cb80184dc/agents/40560fc7-a40b-4106-806f-95a7060c8e0b/instructions/AGENTS.md docs/agents/concierge.md
-  ```
+- [x] **Step 1: PUT 新 instructions-bundle** (HTTP 200; runtime AGENTS.md 248 行 = source；含 3 个新 section header)
 
 ---
 
