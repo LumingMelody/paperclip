@@ -309,9 +309,20 @@ paperclip 仓库（这边）/docs/
 
 ### Task 5.1: `launchctl kickstart` 全部 7 个 plist
 
-- [ ] **Step 1: 触发 install-launchd-plists.sh 重新加载（现在 .env.* 全在）**
-- [ ] **Step 2: `launchctl list | grep dingtalk-bot` 验证 7 个进程都 running**
-- [ ] **Step 3: 每个 channel 的 bot.err.log 都看到「starting bot — channel=...」**
+- [x] **Step 1: 触发 install-launchd-plists.sh 重新加载（现在 .env.* 全在）**
+  - Done as part of Phase 4 Task 4.1 Step 2 — all 7 .env files written +
+    install script ran clean (`Installed (7): concierge finance product_sizing
+    supply cx_ops marketing research`).
+- [x] **Step 2: `launchctl list | grep dingtalk-bot` 验证 7 个进程都 running**
+  - Verified: concierge 95094, finance 95098, product_sizing 95102,
+    supply 95111, cx_ops 95123, marketing 95146, research 95169. Each
+    plist's launchctl status = "0" (success), all PIDs alive.
+- [x] **Step 3: 每个 channel 的 bot.err.log 都看到「starting bot — channel=...」**
+  - All 7 `_logs/bot-<channel>.err.log` contain matching `starting bot —
+    channel=<name>` + `open connection` (Stream socket) lines at 18:23:20.
+    Concierge additionally shows `active_push enabled`; the other 6 show
+    `active_push disabled — missing ROBOT_CODE; will use Stream reply_markdown
+    for replies` as expected pre-onboarding (lazy-init on first @-mention).
 
 ### Task 5.2: 每个新 channel 单独 smoke
 
