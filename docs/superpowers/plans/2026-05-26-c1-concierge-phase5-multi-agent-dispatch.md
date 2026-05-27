@@ -198,7 +198,7 @@ via {{ 你实际调用的工具列表 }}
 **Files:**
 - New: `scripts/phase5-push-agent-prompts.sh`
 
-- [ ] **Step 1: 写脚本（bash + curl，参考 phase 2 seed-concierge-agent.sh 模式）**
+- [x] **Step 1: 写脚本（bash + curl，参考 phase 2 seed-concierge-agent.sh 模式）** (scripts/phase5-push-agent-prompts.sh — bash 3.x compatible, no associative arrays)
 
 ```bash
 #!/usr/bin/env bash
@@ -244,15 +244,11 @@ print(json.dumps({'path': 'AGENTS.md', 'content': content, 'clearLegacyPromptTem
 done
 ```
 
-- [ ] **Step 2: chmod +x + 运行**
+- [x] **Step 2: chmod +x + 运行** (6/6 HTTP 200, 总计 1217 行 pushed)
 
-- [ ] **Step 3: 用 wc 验证每个 runtime AGENTS.md 行数对上 source**
+- [x] **Step 3: 用 wc 验证每个 runtime AGENTS.md 行数对上 source** (6/6 perfectly aligned, source=runtime for all)
 
-- [ ] **Step 4: Commit**
-  ```bash
-  git add scripts/phase5-push-agent-prompts.sh
-  git commit -m "feat(c1/phase5): bulk push agent prompts to runtime"
-  ```
+- [x] **Step 4: Commit** (一起跟 script)
 
 ---
 
