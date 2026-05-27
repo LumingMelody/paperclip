@@ -69,44 +69,27 @@ scripts/
 - Marketing: `0f4f087f-...`
 - Research: `6ab1f6fa-...`
 
-- [ ] **Step 1: 检查每个 agent 的 source prompt 与 runtime snapshot 是否一致**
-  ```bash
-  for agent in finance product_sizing supply cx_ops marketing research; do
-    SRC="docs/agents/${agent}.md"
-    [ -f "$SRC" ] && echo "✅ source: $SRC ($(wc -l < $SRC) lines)" || echo "❌ MISSING: $SRC"
-  done
-  ```
+- [x] **Step 1: 检查每个 agent 的 source prompt 与 runtime snapshot 是否一致** (6/6 缺 source — 全部只有 runtime)
 
-- [ ] **Step 2: 如果某个 agent 没有 source markdown（只有 runtime snapshot），把 runtime 反向同步到 docs/agents/**
-  ```bash
-  # 拉 runtime 内容回 source（用于 Phase 5 改造的 diff 起点）
-  cp /Users/melodylu/.paperclip/.../instructions/AGENTS.md docs/agents/<missing>.md
-  ```
+- [x] **Step 2: 如果某个 agent 没有 source markdown（只有 runtime snapshot），把 runtime 反向同步到 docs/agents/** (6 file copied → snake_case naming)
 
-- [ ] **Step 3: 把这些 source markdown 全部 commit 一次，作为 Phase 5 改造的 baseline**
+- [x] **Step 3: 把这些 source markdown 全部 commit 一次，作为 Phase 5 改造的 baseline** (commit 1045 inserts)
 
 ### Task 0.2: 验证 sub-issue 派单链路（手动 smoke test）
 
 **Files:** 无新文件，纯 curl 实验
 
-- [ ] **Step 1: 手动派一个 sub-issue 给 ProductSizing，验证派单成功 + 业务 agent 能接到**
-  ```bash
-  # 先创建一个"主 issue" 当 parent
-  PARENT=$(rtk proxy curl -s -X POST http://127.0.0.1:3100/api/companies/a0f62167-5f88-475b-bdc0-3d4cb80184dc/issues \
-    -H 'content-type: application/json' \
-    -d '{"projectId":"bed68dec-ddf6-4aa1-b921-48c4630e92c6","title":"Phase 5 smoke parent","status":"in_progress","assigneeAgentId":"40560fc7-a40b-4106-806f-95a7060c8e0b"}' \
-    | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
-  echo "parent=$PARENT"
+- [x] **Step 1: 手动派一个 sub-issue 给 ProductSizing，验证派单成功 + 业务 agent 能接到**
+  - parent: `3d603133-56b3-41e8-a7a6-37a817431f8c`
+  - sub-issue: `521ac10e-c6d0-4a81-a348-c3cf9afba9da` assigned to ProductSizing
+  - 创建即 HTTP 201, parentId/assigneeAgentId 正确
 
-  # 派 sub-issue
-  rtk proxy curl -s -X POST http://127.0.0.1:3100/api/companies/a0f62167-5f88-475b-bdc0-3d4cb80184dc/issues \
-    -H 'content-type: application/json' \
-    -d "{\"parentId\":\"$PARENT\",\"projectId\":\"bed68dec-ddf6-4aa1-b921-48c4630e92c6\",\"title\":\"[Concierge派单] EE02559 尺码诊断\",\"description\":\"EE02559 退货率 73.7% 集中在偏大，请给 1-3 条尺码表/版型修订建议\",\"status\":\"todo\",\"assigneeAgentId\":\"af07531d-...\"}"
-  ```
+- [x] **Step 2: 观察 ProductSizing 是否在 ~90s 内 pickup 并写 comment** (pickup + done in **75 秒** ✅)
+  - T+0s: status=in_progress (Concierge 处于 in_progress 后 wake fired immediately)
+  - T+75s: status=done with substantive markdown comment from ProductSizing UUID `af07531d`
+  - 答复内容引用了真实工具调用 (`lingxing.styleSummary` + `rag_searchRefundComments`) 而非编造
 
-- [ ] **Step 2: 观察 ProductSizing 是否在 ~90s 内 pickup 并写 comment**（用 paperclip UI 或 `GET /api/issues/<sub-id>/comments`）
-
-- [ ] **Step 3: 把结论写到 spec doc** —— 主要确认 paperclip 内置 wakeup + blocked-by 机制是否真的自动工作，不需要 Concierge 写轮询
+- [x] **Step 3: 把结论写到 spec doc** (recorded in Phase 3 spec doc — Phase 0 smoke proof: 内置 wakeup 自动工作, **不需要 Concierge 写轮询**, 单 sub-issue 平均完成时间 ~75-90s)
 
 ---
 
