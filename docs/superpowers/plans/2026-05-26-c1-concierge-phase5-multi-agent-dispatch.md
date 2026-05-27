@@ -128,11 +128,7 @@ POST /api/companies/{companyId}/issues
 }
 ```
 
-- [ ] **Step 4: Commit**
-  ```bash
-  git add docs/agents/concierge.md
-  git commit -m "docs(c1/phase5): concierge dispatch decision matrix"
-  ```
+- [x] **Step 4: Commit** (commit `c4f0a428` 包含 Task 1.1 全部 4 个步骤的改动 + plan checkboxes)
 
 ### Task 1.2: 在 docs/agents/concierge.md 加 §aggregation 段
 
