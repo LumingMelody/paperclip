@@ -277,9 +277,26 @@ paperclip 仓库（这边）/docs/
 
 ### Task 4.1: user 钉钉后台创建 6 个 app
 
-- [ ] **Step 1: 按 `docs/guides/everpretty-dingtalk-multi-channel-onboarding.md` 创 6 个 app**
-- [ ] **Step 2: 把每个 app 的 appKey / appSecret / robotCode 填到对应 `.env.<channel>`**
+- [x] **Step 1: 按 `docs/guides/everpretty-dingtalk-multi-channel-onboarding.md` 创 6 个 app**
+  - User created 6 apps in DingTalk Open Platform: Finance, ProductSizing,
+    Supply, CXOps, Marketing, Research. Credentials supplied (Client ID +
+    Client Secret). 钉钉 App ID UUIDs recorded as comments in each .env file
+    (informational — not used by the SDK).
+- [x] **Step 2: 把每个 app 的 appKey / appSecret / robotCode 填到对应 `.env.<channel>`**
+  - 6 .env.<channel> files written with APP_KEY, APP_SECRET, the bound
+    paperclip agent UUID (TARGET_AGENT_ID), and all shared paperclip routing
+    fields. ROBOT_CODE left blank — lazy-init from incoming message's
+    `chatbot_msg.robot_code` on first @-mention.
+  - All 7 launchd plists bootstrapped via `install-launchd-plists.sh`;
+    Stream sockets all connected; bots running PIDs:
+    concierge 95094, finance 95098, product_sizing 95102, supply 95111,
+    cx_ops 95123, marketing 95146, research 95169.
 - [ ] **Step 3: 把每个 bot 装进对应群 + 在群里 @ 一次让 conversation_registry 学到 cid**
+  - **autoloop-deferred** — user must add each new bot to its target group
+    in DingTalk and @ once; conversation_registry will record (group_id,
+    robot_code) automatically when the bot's first ChatbotMessage callback
+    fires. After this, run autoloop again — the registry-→-env backfill is
+    automatable (see Task 4.2).
 
 ### Task 4.2: user 把 6 个 conv_id 填回 .env.<channel>
 
