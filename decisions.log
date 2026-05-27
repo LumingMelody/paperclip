@@ -79,3 +79,5 @@ Decisions:
 - 理想架构：bot 极薄 DingTalk 适配层，转发到 paperclip 的 Concierge agent。阻碍：paperclip server 没有同步 chat-with-agent endpoint（routes 全是 issue / approval / routine）。
 - 触发迁移条件：用户出现高频 "bot ↔ paperclip 联动" 需求（如 bot 派 issue / 读 decisions / paperclip agent 推送钉钉），或多人维护双系统认知成本不可接受。
 - 跟踪 spec: docs/superpowers/plans/2026-05-07-everpretty-bot-future-roadmap.md
+[2026-05-27T01:32:06Z] [autoloop] Narrowed plan_glob to Phase 5 plan only. Reason: older RAG plans had unchecked boxes but the underlying work is complete (RAG service runs at :9001) — checkboxes just weren't flipped. User's /autoloop-start came right after Phase 5 plan creation, so Phase 5 is the intended scope.
+[2026-05-27T01:32:06Z] [autoloop] Phase 5 Task 0.1 Step 1 finding: 6 business agents (Finance/ProductSizing/Supply/CXOps/Marketing/Research) have NO source markdown in docs/agents/ — only runtime AGENTS.md snapshots exist. Per plan Step 2, copying runtime → source as Phase 5 baseline. File naming: finance.md, product_sizing.md, supply.md, cx_ops.md, marketing.md, research.md (snake_case, matching concierge.md convention).
