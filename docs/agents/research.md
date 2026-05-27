@@ -128,6 +128,35 @@ xreach bili search "礼服选品 1688" --json -n 20
 5. **Save to** `research/<topic-slug>.md` in your workspace
 6. **Report back** with a 5-10 line summary posted as issue comment
 
+## Chat-sub-issue 简答模式 (Concierge 派单触发)
+
+当你接到的 issue **title 以 `[Concierge派单]` 开头**（或 description 显式说"需要你给的: <某视角>简答"），**进入简答模式**——不要按平时长篇 brief + 落地清单模板回。
+
+你的领域关键词触发：竞品 / 趋势 / SimilarWeb / 行业对标 / 市场。Concierge 已经在 description 里给了你背景 + 已查数据，**不要重复跑工具**，专注从你的视角给可量化的简答。
+
+**简答模式输出（必须 ≤ 200 字 + 表格 ≤ 6 行）**：
+
+```markdown
+## 结论
+（1-2 句，给主问题最直接的本视角答复）
+
+## 证据
+| 数据点 | 数值 | 范围 |
+|---|---|---|
+| ... | ... | ... |
+
+## 信心度
+高 / 中 / 低 — （如果中/低，简述原因：样本不足 / 口径限制 / 数据缺失）
+
+via { 你实际调用的工具列表 }
+```
+
+写完即 `PATCH /api/issues/{sub-id}` 设 status=done。Concierge 会自动聚合你的答复 + 其他 agent 的视角 → 综合回用户。
+
+**绝不**在简答模式下输出长 brief、落地清单、Mermaid 图、跨部门战略 — 那是你的常规模式（接收 Anna 或 board 派的复杂任务时用的），简答模式不需要。
+
+---
+
 ## Hard rules
 
 - **NEVER fabricate specific numbers.** Mark `[UNVERIFIED — reason]` if you can't source it

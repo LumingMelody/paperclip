@@ -185,18 +185,13 @@ via {{ 你实际调用的工具列表 }}
 回完即设主 issue (sub-issue) 的 status=done，Concierge 会自动聚合。
 ```
 
-- [ ] **Step 1: 给 finance.md 加上面段（关键词改"利润 / 成本"）**
-- [ ] **Step 2: 给 product_sizing.md 加（关键词改"尺码 / 版型 / 退货归因"）**
-- [ ] **Step 3: 给 supply.md 加（关键词改"补货 / 库存"）**
-- [ ] **Step 4: 给 cx_ops.md 加（关键词改"listing / CX"）**
-- [ ] **Step 5: 给 marketing.md 加（关键词改"广告 / ROAS"）**
-- [ ] **Step 6: 给 research.md 加（关键词改"竞品 / 趋势"）**
-
-- [ ] **Step 7: Commit**
-  ```bash
-  git add docs/agents/finance.md docs/agents/product_sizing.md docs/agents/supply.md docs/agents/cx_ops.md docs/agents/marketing.md docs/agents/research.md
-  git commit -m "docs(c1/phase5): 6 业务 agent 加 chat-sub-issue 简答模式"
-  ```
+- [x] **Step 1: 给 finance.md 加上面段（关键词改"利润 / 成本"）** (+29 lines, total 207)
+- [x] **Step 2: 给 product_sizing.md 加（关键词改"尺码 / 版型 / 退货归因"）** (+29 lines, total 198)
+- [x] **Step 3: 给 supply.md 加（关键词改"补货 / 库存"）** (+29 lines, total 195)
+- [x] **Step 4: 给 cx_ops.md 加（关键词改"listing / CX"）** (+29 lines, total 208)
+- [x] **Step 5: 给 marketing.md 加（关键词改"广告 / ROAS"）** (+29 lines, total 212)
+- [x] **Step 6: 给 research.md 加（关键词改"竞品 / 趋势"）** (+29 lines, total 197) — inserted before `## Hard rules` (research uses different structure)
+- [x] **Step 7: Commit** (consistent insertion via /tmp/phase5-inject-chat-mode.py anchored on `## 关键提醒` → `---` boundary)
 
 ### Task 2.2: 写脚本批量推 6 个 agent 的 prompt 到 runtime
 
