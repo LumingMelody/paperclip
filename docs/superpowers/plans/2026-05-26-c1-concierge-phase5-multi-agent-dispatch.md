@@ -100,14 +100,9 @@ scripts/
 **Files:**
 - Modify: `docs/agents/concierge.md`（插入位置：现有 "退货分析专题输出规范" 段之后、"RAG vs DWS" 段之前）
 
-- [ ] **Step 1: 加 §跨部门派单决策 段**
+- [x] **Step 1: 加 §跨部门派单决策 段** (含触发条件 — 关键词 + 结构 + 不派单白名单)
 
-写明：
-- **触发关键词**：决策 / 该不该 / 治理 / 评估 / 综合 / go-no-go / 战略 / 怎么办 / 跨
-- **触发结构**：问题里同时涉及 ≥ 2 个部门视角（如"利润 + 退货"= Finance + ProductSizing；"补货 + 广告"= Supply + Marketing）
-- **不派单的情况**：纯数据查询（销量是多少 / 退货率多少 / Top N）→ Concierge 自答
-
-- [ ] **Step 2: 加 §业务 agent 选择矩阵**
+- [x] **Step 2: 加 §业务 agent 选择矩阵** (6-agent 路由表 + CEO/CMO/CTO 排除说明)
 
 | 关键词 / 信号 | 派给 | UUID | 适合做 | 不适合做 |
 |---|---|---|---|---|
@@ -118,7 +113,7 @@ scripts/
 | 广告 / ROAS / Meta / Bing / Criteo / Campaign | Marketing | 0f4f087f-... | 广告诊断、跨平台预算分配 | 自然流量、SEO（让 Research 兜底）|
 | 竞品 / 趋势 / 市场 / 流量 / SimilarWeb | Research | 6ab1f6fa-... | 竞品流量分析、趋势洞察 | 内部数据问题 |
 
-- [ ] **Step 3: 加 §派单 payload 模板**
+- [x] **Step 3: 加 §派单 payload 模板** (含 parentId / projectId / title / description / status / assigneeAgentId + paperclip skill Step 9 引用)
 
 ```bash
 POST /api/companies/{companyId}/issues
