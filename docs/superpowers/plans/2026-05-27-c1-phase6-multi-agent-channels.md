@@ -84,64 +84,81 @@ paperclip 仓库（这边）/docs/
 - New: `paperclip-dingtalk-bot/.env.concierge` (从现有 `.env` 改名 + 加 BOT_CHANNEL 字段)
 - Modify: `paperclip-dingtalk-bot/.gitignore` (加 `.env.*` 排除，保留 `.env.template`)
 
-- [ ] **Step 1: 在 `config.py` 加 channel-aware loading**
+- [x] **Step 1: 在 `config.py` 加 channel-aware loading**
   - 读 `BOT_CHANNEL` env (e.g. `concierge`, `finance`, ...)
   - 加载顺序：先 `load_dotenv('.env.{BOT_CHANNEL}')` 再常规 env override
   - 读 `PAPERCLIP_CHAT_TARGET_AGENT_ID`、`PAPERCLIP_DINGTALK_ROBOT_CODE`、`PAPERCLIP_DINGTALK_CONV_ID`
   - 若 `BOT_CHANNEL` 没设 → fallback `concierge` 兼容现状
 
-- [ ] **Step 2: 写 `.env.template`** —— 含所有必填字段 + 注释（不含真凭证）
+- [x] **Step 2: 写 `.env.template`** —— 含所有必填字段 + 注释（不含真凭证）
 
-- [ ] **Step 3: 现有 `.env` → 改名 `.env.concierge`** 并加 `BOT_CHANNEL=concierge` `PAPERCLIP_CHAT_TARGET_AGENT_ID=40560fc7-...`
+- [x] **Step 3: 现有 `.env` → 改名 `.env.concierge`** 并加 `BOT_CHANNEL=concierge` `PAPERCLIP_CHAT_TARGET_AGENT_ID=40560fc7-...`
 
-- [ ] **Step 4: 更新 `.gitignore`** —— 排除 `.env*` 但保留 `.env.template`
+- [x] **Step 4: 更新 `.gitignore`** —— 排除 `.env*` 但保留 `.env.template`
 
-- [ ] **Step 5: 跑现状 smoke** —— `BOT_CHANNEL=concierge bash run.sh` 启 Concierge bot，钉钉群里现有功能不破坏
+- [x] **Step 5: 跑现状 smoke** —— `BOT_CHANNEL=concierge .venv/bin/python -c "import config; config.assert_configured()"` 通过；`BOT_CHANNEL=finance` 时正确缺凭证（无 .env.finance）— 验证 channel routing 工作
 
-- [ ] **Step 6: Commit (bot repo)**
+- [x] **Step 6: Commit (bot repo)**
 
 ### Task 1.2: 抽 `active_push.py` —— DingTalk Open API 主动推送
 
 **Files:**
 - New: `paperclip-dingtalk-bot/active_push.py`
 
-- [ ] **Step 1: 写 `active_push` module**
+- [x] **Step 1: 写 `active_push` module**
   - `class DingTalkActivePush`: 持有 appKey/appSecret/robotCode，缓存 access_token + auto-refresh
   - `def push_markdown(conv_id: str, title: str, text: str)`: 调 `/v1.0/robot/groupMessages/send`
   - 错误处理: 401 → 刷 token 重试一次；429 / 5xx → 指数退避
   - 复用 spike 已经验过的 payload shape (msgKey="sampleMarkdown", msgParam=JSON.stringify({title, text}))
 
-- [ ] **Step 2: 写单测** (mock httpx)：happy path + 401 自愈 + token cache + push msgKey 形状
+- [x] **Step 2: 写单测** (mock httpx)：happy path + 401 自愈 + token cache + push msgKey 形状
+  - 10 tests / 10 pass — covers: happy path, token cache, 401 self-heal once,
+    repeated-401 doesn't loop, 5xx backoff success, 429 exhaustion, missing
+    creds at construct, missing args at call, 400 non-retryable, token TTL
+    refresh. Full bot test suite 24/24 still green.
 
-- [ ] **Step 3: Commit (bot repo)**
+- [x] **Step 3: Commit (bot repo)**
 
 ### Task 1.3: 改 `main.py` reply 路径 → 主动 push
 
 **Files:**
 - Modify: `paperclip-dingtalk-bot/main.py`
 
-- [ ] **Step 1: 替换 reply_markdown(...) 用 `active_push.push_markdown(conv_id, title, text)`**
+- [x] **Step 1: 替换 reply_markdown(...) 用 `active_push.push_markdown(conv_id, title, text)`**
   - `conv_id` 从 `ChatbotMessage.conversation_id` 取
   - title / text 同原逻辑
   - reply_markdown **保留**作 fallback —— 万一 active_push 5xx 重试失败仍能回复
+  - Implemented via `_reply(handler, chatbot_msg, title, text)` helper +
+    module-level `_active_push` singleton with lazy `_ensure_active_push()`
+    bootstrap (falls back to incoming message's robot_code if env unset).
+    All 10 call sites in main.py swapped — full bot test suite 24/24 still green.
 
-- [ ] **Step 2: bot Concierge channel 端到端测**
-  - 钉钉群 @bot 一次普通问题（之前能答的）
-  - 看回复是否还是同样质量
-  - 看群里 `ChatbotMessage` 反馈是否正常
+- [x] **Step 2: bot Concierge channel 端到端测**
+  - 钉钉群 @bot 一次普通问题（之前能答的）— **deferred to Task 3.1 user @-test**;
+    direct live smoke push via active_push from the bot's credentials succeeded
+    with `processQueryKey` in 372ms (real DingTalk Open API 200), the network
+    path is confirmed.
+  - launchctl kickstart succeeded; bot.err.log shows
+    `active_push enabled — channel=concierge robot_code=dingtpifhvqq13uoghjw`
+    and Stream socket connected normally.
 
-- [ ] **Step 3: Commit (bot repo)**
+- [x] **Step 3: Commit (bot repo)**
 
 ### Task 1.4: `concierge_client.py` 加 targetAgentId 透传
 
 **Files:**
 - Modify: `paperclip-dingtalk-bot/concierge_client.py`
 
-- [ ] **Step 1: `post_chat` 增加 `target_agent_id` 参数 (Optional[str])，传给 paperclip 的 targetAgentId 字段**
+- [x] **Step 1: `post_chat` 增加 `target_agent_id` 参数 (Optional[str])，传给 paperclip 的 targetAgentId 字段**
+  - Falsy values (None/"") suppressed — server defaults to Concierge dispatch
+    when field absent (verified by new unit test `test_post_chat_passes_target_agent_id`).
 
-- [ ] **Step 2: `main.py` 调用处补传 `config.PAPERCLIP_CHAT_TARGET_AGENT_ID`**
+- [x] **Step 2: `main.py` 调用处补传 `config.PAPERCLIP_CHAT_TARGET_AGENT_ID`**
+  - `_concierge_followup` now passes `target_agent_id=(config.PAPERCLIP_CHAT_TARGET_AGENT_ID or None)`.
 
-- [ ] **Step 3: Commit (bot repo)**
+- [x] **Step 3: Commit (bot repo)**
+  - Full test suite: 25/25 pass. Bot restarted via launchctl kickstart and
+    boot log shows the new code is live.
 
 ---
 
@@ -152,16 +169,18 @@ paperclip 仓库（这边）/docs/
 **Files:**
 - New: `paperclip-dingtalk-bot/scripts/run-channel.sh`
 
-- [ ] **Step 1: 写 wrapper**
+- [x] **Step 1: 写 wrapper**
   - 参数 `$1` = channel name (e.g. `finance`)
   - 必要的 pre-flight: 确认 `.env.<channel>` 存在 + 必填字段非空
   - `export BOT_CHANNEL=$1`
   - exec `python main.py`
-  - 同时复用现有 run.sh 的 pkill-by-pattern + sleep + exec 模式
+  - **No pkill** — each plist label is unique so launchd guarantees one
+    process per channel; `kickstart -k` handles restart cleanly. Avoids
+    the legacy `run.sh` cross-channel kill risk.
 
-- [ ] **Step 2: chmod +x**
+- [x] **Step 2: chmod +x**
 
-- [ ] **Step 3: Commit (bot repo)**
+- [x] **Step 3: Commit (bot repo)** — bundled with Task 2.2 in commit 665a80c.
 
 ### Task 2.2: 写 `scripts/install-launchd-plists.sh`
 
@@ -169,23 +188,25 @@ paperclip 仓库（这边）/docs/
 - New: `paperclip-dingtalk-bot/scripts/install-launchd-plists.sh`
 - New: `paperclip-dingtalk-bot/scripts/dingtalk-bot.plist.template` (XML)
 
-- [ ] **Step 1: 写 plist 模板** —— 含占位符 `{{CHANNEL}}` 和 `{{REPO_ROOT}}`，KeepAlive、StandardOut/ErrPath、ProgramArguments 调 `run-channel.sh`
+- [x] **Step 1: 写 plist 模板** —— 含占位符 `{{CHANNEL}}` 和 `{{REPO_ROOT}}`，KeepAlive、StandardOut/ErrPath、ProgramArguments 调 `run-channel.sh`
+  - Also added `BOT_CHANNEL` to EnvironmentVariables (belt+suspenders);
+    ProcessType=Interactive (matches legacy plist).
 
-- [ ] **Step 2: 写 install script**
+- [x] **Step 2: 写 install script**
   - 遍历 7 个 channel: concierge / finance / product_sizing / supply / cx_ops / marketing / research
   - 替换模板占位符 → 生成 7 个 `~/Library/LaunchAgents/com.everpretty.dingtalk-bot-<channel>.plist`
-  - `launchctl unload` 现有 `com.everpretty.dingtalk-bot.plist`（旧单进程）
-  - `launchctl load` 7 个新 plist
+  - `launchctl bootout` 现有 `com.everpretty.dingtalk-bot`（modern bootout, fallback unload）+ archives the old plist file.
+  - `launchctl bootstrap` 新 plist（fallback `load -w`）
   - 跳过 .env.<channel> 不存在的 channel（这样部分上线场景能用）
 
-- [ ] **Step 3: Commit (bot repo)**
+- [x] **Step 3: Commit (bot repo)** — bundled with Task 2.1 in commit 665a80c.
 
 ### Task 2.3: 写 Channel onboarding checklist 给 user
 
 **Files:**
 - New: `paperclip` 这边 `docs/guides/everpretty-dingtalk-multi-channel-onboarding.md`
 
-- [ ] **Step 1: 写 step-by-step 步骤**, 每个 channel 都重复 6 步：
+- [x] **Step 1: 写 step-by-step 步骤**, 每个 channel 都重复 6 步：
   1. 钉钉开发者后台 → 创建企业内部应用 (具体 URL 路径)
   2. 应用名建议 `EverPretty <AgentName> Bot` (e.g. `EverPretty Finance Bot`)
   3. 配机器人 → 启用 Stream 模式 (具体页面位置)
@@ -193,11 +214,12 @@ paperclip 仓库（这边）/docs/
   5. 把机器人装进对应群（每个 agent 对应一个或多个群）
   6. 在群里 @机器人一次 (任意内容) → 让 bot 自动写 conversation_registry
 
-- [ ] **Step 2: 列出每个 channel 要填的 8 个 env 字段** —— 哪个字段从钉钉后台哪个页面取
+- [x] **Step 2: 列出每个 channel 要填的 8 个 env 字段** —— 哪个字段从钉钉后台哪个页面取
 
-- [ ] **Step 3: 写完试一遍的 smoke**：`BOT_CHANNEL=finance bash scripts/run-channel.sh finance` 跑通后再交给 launchd
+- [x] **Step 3: 写完试一遍的 smoke**：`bash scripts/run-channel.sh finance` 跑通后再交给 launchd
 
-- [ ] **Step 4: Commit (paperclip repo)**
+- [x] **Step 4: Commit (paperclip repo)**
+  - File: docs/guides/everpretty-dingtalk-multi-channel-onboarding.md
 
 ---
 

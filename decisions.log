@@ -85,3 +85,16 @@ Decisions:
 [2026-05-27T02:02:21Z] [autoloop] Phase 5 e2e verified — main issue 81f0e50b dispatched 3 correct sub-issues (Finance/ProductSizing/Supply), Concierge aggregated into perfect 决策汇总 format. 2 known limitations recorded in spec: (1) paperclip verifier reverts sub-issue done→in_progress for ProductSizing-style answers, requires manual PATCH; (2) Concierge has no super-timeout watchdog, waits indefinitely on blocked sub-issues. Both deferred to future iteration.
 [2026-05-27T09:26:36Z] [autoloop/spike] Phase 1 PASS: DingTalk Open API /v1.0/robot/groupMessages/send accepts active markdown push from existing 'EverPretty 智能助手' app credentials. HTTP 200 + processQueryKey. No additional permission grant required from user. Endpoint: POST https://api.dingtalk.com/v1.0/robot/groupMessages/send, header 'x-acs-dingtalk-access-token: <token>', body {robotCode, openConversationId, msgKey='sampleMarkdown', msgParam=JSON.stringify({title,text})}. Token endpoint: POST /v1.0/oauth2/accessToken with {appKey,appSecret} returns {accessToken, expireIn=7200s}. The bot's existing conversation_registry.py at ~/.paperclip/dingtalk_conversations.json already auto-populates with openConversationId + robot_code on every incoming message — Phase 6.0 bot processes can reuse this exact pattern.
 [2026-05-27T09:36:42Z] [autoloop/spike] Phase 6 spike COMPLETE — 4/4 unknowns validated. Phase 6.0 GO decision recorded in docs/superpowers/specs/2026-05-27-c1-phase6-spike-spec.md. Key findings: (1) DingTalk Open API /v1.0/robot/groupMessages/send accepts active push from existing app credentials, HTTP 200 + processQueryKey. (2) /api/chat + targetAgentId UUID field routes to specified agent, defaults to Concierge — backward compatible. Bonus: caught and fixed a Phase 5 follow-up-wakeup bug where any same-issue user message woke Concierge even if the issue was assigned to a different agent; now uses effectiveAgentId = existing.assigneeAgentId for follow-ups. (3) Composite key dingtalk:<app>:<conv>:<staff> correctly isolates threads across apps. (4) End-to-end Finance bot simulation: 150s from POST /api/chat → Finance answer → Open API push. Phase 6.0 plan to be written separately (3-4 days estimated).
+
+## 2026-05-27 autoloop — Phase 6.0 Task 1.1 done
+
+- Scope picked for autoloop: `2026-05-27-c1-phase6-multi-agent-channels.md`
+  (44 unchecked; 7 newest plan; natural continuation of Phase 6 spike just merged).
+- Phase 1.1 done directly by Claude (small config edit + file ops + smoke).
+  Bot repo commit: 17312f6 `feat(bot): Phase 6 Task 1.1 — BOT_CHANNEL env-driven multi-channel config`.
+- Decided: `.env.<channel>` files gitignored via `.env.*` rule with
+  `!.env.template` / `!.env.example` exceptions. Renamed legacy `.env` → `.env.concierge`
+  via plain `mv` (gitignored → `git mv` fails); `git status` clean.
+- Task 1.2 (`active_push.py` — DingTalk Open API active push module + httpx-mocked
+  tests) dispatched to Codex per CLAUDE.md "Codex implements" rule. Plan checkboxes
+  are source of truth.
