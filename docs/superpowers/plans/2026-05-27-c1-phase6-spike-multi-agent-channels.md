@@ -87,22 +87,9 @@ server/src/routes/chat.test.ts (if exists) ← +1 test case
 
 ### Task 3.1: 同一 senderKey 不同 conversationKey 不复用 issue
 
-- [ ] **Step 1: POST 两条同 senderKey 但不同 composite conversationKey 的 chat（24h 窗口内）**
-  ```bash
-  # 模拟 Finance 群里 staff-A 发问
-  rtk proxy curl -sS -X POST http://127.0.0.1:3100/api/chat -H 'content-type: application/json' \
-    -d '{"companyId":"a0f62167-...","projectId":"bed68dec-...","senderKey":"staff-A","conversationKey":"dingtalk:finance-app:cid-finance-group:staff-A","targetAgentId":"ffbebaee-...","text":"Finance: 我想问账"}'
-
-  # 模拟 Supply 群里 staff-A 发问（同一用户但不同 app/群）
-  rtk proxy curl -sS -X POST http://127.0.0.1:3100/api/chat -H 'content-type: application/json' \
-    -d '{"companyId":"a0f62167-...","projectId":"bed68dec-...","senderKey":"staff-A","conversationKey":"dingtalk:supply-app:cid-supply-group:staff-A","targetAgentId":"960b5f82-...","text":"Supply: 我想问库存"}'
-  ```
-
-- [ ] **Step 2: 验证 paperclip 创建了 2 个 issue（不是复用）**
-  - GET /api/companies/<id>/issues?senderKey=staff-A&limit=5
-  - 期望: 2 个 created=true，assignee 一个是 Finance 一个是 Supply
-
-- [ ] **Step 3: 同一 conversationKey 再发一条 → 应该复用 issue（验证现有 reuse 行为没破）**
+- [x] **Step 1: POST 两条同 senderKey 但不同 composite conversationKey** — A=Finance issue `413c7604-...` created, B=Supply issue `beee7013-...` created, 不同 issue ✅
+- [x] **Step 2: 验证 paperclip 创建了 2 个 issue** — `created=True` 两次，issue ID 不同 ✅
+- [x] **Step 3: 同一 conversationKey 再发一条 → 应该复用** — `C=A=413c7604, created=False` Phase 5 reuse 行为保留 ✅
 
 ---
 
@@ -110,17 +97,11 @@ server/src/routes/chat.test.ts (if exists) ← +1 test case
 
 ### Task 4.1: curl 模拟 Finance bot 完整生命周期
 
-- [ ] **Step 1: 模拟"用户 @ Finance bot"** — POST /api/chat with targetAgentId=Finance + composite key
-
-- [ ] **Step 2: 等 Finance agent 跑完（poll /api/issues/:id 看 status）**
-
-- [ ] **Step 3: 拉 Finance 的最终 comment（GET /api/issues/:id/comments）**
-
-- [ ] **Step 4: 用 Phase 1 验过的主动 push API 把 Finance 答复推到测试群**
-  - 模拟 future Finance bot 进程的最后一步动作
-  - 看老板群里有没有出现这条 markdown
-
-- [ ] **Step 5: 验证：群里看到的内容 = paperclip issue 里 Finance 写的最后一条 comment**
+- [x] **Step 1: 模拟"用户 @ Finance bot"** — main_id `69674565-8b77-40bc-9b8e-1b890a31f6c4`, targetAgentId=Finance, composite conversationKey
+- [x] **Step 2: 等 Finance agent 跑完** — done at T+150s
+- [x] **Step 3: 拉 Finance 的最终 comment** — 517 字结构化答案（结论/证据/信心度/via），符合 Phase 5 加的 chat-sub-issue 简答模式
+- [x] **Step 4: 用 Phase 1 验过的主动 push API 把 Finance 答复推到测试群** — HTTP 200 + processQueryKey ✅
+- [x] **Step 5: 验证 群内容 = Finance 写的 comment** — 推送 body 即 `/tmp/phase4-answer.md` 内容（含 Phase 6 spike 横幅 + Finance 原 markdown）
 
 ---
 
@@ -130,22 +111,9 @@ server/src/routes/chat.test.ts (if exists) ← +1 test case
 
 **Files:** `docs/superpowers/specs/2026-05-27-c1-phase6-spike-spec.md`
 
-- [ ] **Step 1: 记录每个 Phase 的实际结果**
-  - DingTalk 主动 push API endpoint + payload shape + response
-  - access_token TTL + 续期策略
-  - targetAgentId 改动 diff + 不破坏 Phase 5 验证
-  - 复合 conversationKey 实际行为
-  - 端到端 curl-only 流程跑通
-
-- [ ] **Step 2: 决策 — Phase 6.0 是否可开**
-  - 所有 spike pass → 直接开 Phase 6.0 plan（user 在 DingTalk 后台创 6 个 app + 配凭证 + 6 个 bot 进程）
-  - 主动 push 失败 → 写 Plan B（webhook-based broadcast）spec
-
-- [ ] **Step 3: Commit**
-  ```bash
-  git add docs/superpowers/specs/2026-05-27-c1-phase6-spike-spec.md
-  git commit -m "docs(c1/phase6-spike): spec — 主动 push / targetAgentId / 复合 key 全验证"
-  ```
+- [x] **Step 1: 记录每个 Phase 的实际结果** — see `docs/superpowers/specs/2026-05-27-c1-phase6-spike-spec.md`
+- [x] **Step 2: 决策 — Phase 6.0 是否可开** — **GO**, 4/4 unknowns cleared, all 14 plan checkboxes ticked
+- [x] **Step 3: Commit** — together below
 
 ---
 
