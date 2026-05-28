@@ -394,11 +394,14 @@ async function handleToolUseFromChunk(
     lastToolUseNames.set(agentId, namesKey);
 
     const title = `🔧 ${labelForChannel(match.channelName)} 调用工具`;
+    // DingTalk markdown renderer strips backticks, collapsing `tool` `args`
+    // into one run-on string. Use bold + visible delimiter so each line is
+    // readable: `🔹 tool_name(args)`.
     const lines = tools.slice(0, 6).map((t) => {
-      const argPart = t.args ? ` \`${t.args}\`` : "";
-      return `- \`${t.name}\`${argPart}`;
+      const args = t.args ? `(${t.args})` : "()";
+      return `🔹 **${t.name}**${args}`;
     });
-    if (tools.length > 6) lines.push(`- _… 还有 ${tools.length - 6} 个_`);
+    if (tools.length > 6) lines.push(`_… 还有 ${tools.length - 6} 个_`);
     await pushMarkdown(match.entry, title, lines.join("\n"));
     log.info(`pushed tool_use card → agent=${agentId} tools=${tools.length}`);
   } catch (err) {
