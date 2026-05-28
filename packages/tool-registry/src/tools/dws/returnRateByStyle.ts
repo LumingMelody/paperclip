@@ -11,6 +11,7 @@ const inputSchema = z
     since: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "since must be YYYY-MM-DD"),
     top: z.coerce.number().int().min(1).max(50).optional(),
     minQty: z.coerce.number().int().min(1).optional(),
+    style: z.string().optional(),
   })
   .strict();
 
@@ -18,7 +19,7 @@ const rowSchema = z.object({
   styleCode: z.string().nullable(),
   salesQty: z.number(),
   returnQty: z.number(),
-  returnRate: z.number(),
+  returnRate: z.number().nullable(),
   skuCount: z.number(),
 });
 
@@ -34,6 +35,7 @@ async function handler(ctx: ExecutionContext, input: DwsReturnRateByStyleInput):
     since: input.since,
     top: input.top ?? 20,
     minQty: input.minQty ?? 50,
+    style: input.style,
   });
   return outputSchema.parse(result);
 }
@@ -43,10 +45,11 @@ export const returnRateByStyleDescriptor: ToolDescriptor<DwsReturnRateByStyleInp
   cliSubcommand: "return-rate-by-style",
   source: "dws",
   description:
-    "Highest-return-rate Amazon style codes (sku_left7) for a shop since a given date, " +
-    "where rate = refunded units / ordered units. Source: single internal DW (Aliyun) " +
-    "table with 4yr history and broader store coverage than Lingxing. Distinct from " +
-    "Lingxing return rate, which is per shop_name/SKU.",
+    "Amazon style-code (sku_left7) return rates for a shop since a given date. Omit style " +
+    "to answer highest-return-rate styles; pass an exact style code to answer one specific " +
+    "style's return rate. Rate = refunded units / ordered units. Source: single internal " +
+    "DW (Aliyun) table with 4yr history and broader store coverage than Lingxing. Distinct " +
+    "from Lingxing return rate, which is per shop_name/SKU.",
   readOnly: true,
   inputSchema,
   outputSchema,

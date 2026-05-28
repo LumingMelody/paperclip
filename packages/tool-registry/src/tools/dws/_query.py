@@ -164,7 +164,14 @@ def returns_by_sku(conn, account_id: int, since: str, top: int) -> list[dict[str
         return [serialize_row(r) for r in cur.fetchall()]
 
 
-def return_rate_by_style(conn, account_id: int, since: str, top: int, min_qty: int) -> list[dict[str, Any]]:
+def return_rate_by_style(
+    conn,
+    account_id: int,
+    since: str,
+    top: int,
+    min_qty: int,
+    style: str | None = None,
+) -> list[dict[str, Any]]:
     sql = """
         SELECT
             sku_left7 AS styleCode,
@@ -174,20 +181,27 @@ def return_rate_by_style(conn, account_id: int, since: str, top: int, min_qty: i
         FROM dws_od_amazon_refund_rate_d
         WHERE accountId=%(account_id)s AND check_date>=%(since)s
               AND sku_left7 IS NOT NULL AND sku_left7!=''
-        GROUP BY sku_left7
-        HAVING salesQty >= %(min_qty)s
-        ORDER BY (SUM(rf_quantity)/NULLIF(SUM(quantity),0)) DESC
-        LIMIT %(top)s
     """
+    params: dict[str, Any] = {"account_id": account_id, "since": since, "top": top, "min_qty": min_qty}
+    if style is not None:
+        sql += " AND sku_left7 = %(style)s"
+        params["style"] = style
+    sql += " GROUP BY sku_left7"
+    if style is None:
+        sql += """
+            HAVING salesQty >= %(min_qty)s
+            ORDER BY (SUM(rf_quantity)/NULLIF(SUM(quantity),0)) DESC
+            LIMIT %(top)s
+        """
     with conn.cursor() as cur:
-        cur.execute(sql, {"account_id": account_id, "since": since, "top": top, "min_qty": min_qty})
+        cur.execute(sql, params)
         rows = cur.fetchall()
     out = []
     for r in rows:
         row = serialize_row(r)
         sales_qty = float(row["salesQty"])
         return_qty = float(row["returnQty"])
-        row["returnRate"] = round(return_qty / sales_qty, 4)
+        row["returnRate"] = round(return_qty / sales_qty, 4) if sales_qty > 0 else None
         out.append(row)
     return out
 
@@ -363,6 +377,7 @@ def main() -> None:
                 since=req["since"],
                 top=int(req.get("top", 20)),
                 min_qty=int(req.get("minQty", 50)),
+                style=req.get("style"),
             )
         elif op == "returnDetail":
             rows = return_detail(
