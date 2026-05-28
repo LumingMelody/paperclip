@@ -339,6 +339,16 @@ function summarizeToolArgs(input: unknown): string {
   return pieces.join(", ");
 }
 
+// Claude Code generic plumbing tools — not user-facing business work, just
+// the mechanism the agent uses to call paperclip API or do file I/O. Filtered
+// from the group's tool cards to reduce noise.
+const PLUMBING_TOOLS = new Set([
+  "Bash", "Read", "Write", "Edit", "MultiEdit", "Glob", "Grep",
+  "Skill", "ToolSearch", "TodoWrite", "TodoRead",
+  "NotebookRead", "NotebookEdit",
+  "WebSearch", "WebFetch",
+]);
+
 function extractToolUsesFromChunk(rawChunk: string): ToolUse[] {
   if (!rawChunk || rawChunk.length === 0) return [];
   const lines = rawChunk.split("\n");
@@ -360,6 +370,10 @@ function extractToolUsesFromChunk(rawChunk: string): ToolUse[] {
       if (!block || typeof block !== "object") continue;
       const b = block as { type?: string; name?: string; input?: unknown };
       if (b.type === "tool_use" && typeof b.name === "string") {
+        // Skip Claude Code's generic plumbing tools (Bash/Read/Write/Skill/...).
+        // Those are how the agent CALLS paperclip — not the business analysis
+        // itself. Showing them in the group is noise.
+        if (PLUMBING_TOOLS.has(b.name)) continue;
         // Trim MCP prefix for readability: mcp__paperclip-data__dws_returnsBySku → dws_returnsBySku
         const shortName = b.name.replace(/^mcp__[^_]+__/, "");
         tools.push({ name: shortName, args: summarizeToolArgs(b.input) });
