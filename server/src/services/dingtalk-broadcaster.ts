@@ -26,6 +26,7 @@ import { join } from "node:path";
 import { subscribeCompanyLiveEvents } from "./live-events.js";
 
 const REGISTRY_PATH = join(homedir(), ".paperclip", "dingtalk-channels.json");
+const TRANSLATE_CONFIG_PATH = join(homedir(), ".paperclip", "translate-config.json");
 const TOKEN_URL = "https://api.dingtalk.com/v1.0/oauth2/accessToken";
 const PUSH_URL = "https://api.dingtalk.com/v1.0/robot/groupMessages/send";
 const TOKEN_SAFETY_MARGIN_MS = 5 * 60 * 1000;
@@ -165,6 +166,93 @@ async function pushMarkdown(entry: ChannelEntry, title: string, text: string): P
 function abbreviate(text: string, max: number): string {
   const t = (text ?? "").trim();
   return t.length <= max ? t : `${t.slice(0, max - 1).trimEnd()}…`;
+}
+
+// ─── Narration translation (English → Chinese) ──────────────────────────
+//
+// Claude Sonnet sometimes emits English narration despite the agent's
+// Chinese-output directive (tool results / issue titles in English pull it
+// back to English). Rather than fight the model, translate English narration
+// to Chinese before pushing. Config lives in ~/.paperclip/translate-config.json
+// (api_key, base_url, model, enabled) so no server env plumbing is needed.
+
+interface TranslateConfig {
+  api_key: string;
+  base_url: string;
+  model: string;
+  enabled: boolean;
+}
+
+let translateConfigCache: { value: TranslateConfig | null; loadedAt: number } | null = null;
+const TRANSLATE_CONFIG_TTL_MS = 60_000;
+
+async function loadTranslateConfig(): Promise<TranslateConfig | null> {
+  const now = Date.now();
+  if (translateConfigCache && now - translateConfigCache.loadedAt < TRANSLATE_CONFIG_TTL_MS) {
+    return translateConfigCache.value;
+  }
+  let value: TranslateConfig | null = null;
+  try {
+    const raw = await fs.readFile(TRANSLATE_CONFIG_PATH, "utf-8");
+    const parsed = JSON.parse(raw) as Partial<TranslateConfig>;
+    if (parsed.enabled && parsed.api_key && parsed.base_url && parsed.model) {
+      value = parsed as TranslateConfig;
+    }
+  } catch {
+    value = null;
+  }
+  translateConfigCache = { value, loadedAt: now };
+  return value;
+}
+
+/** Heuristic: is this text English-dominant (worth translating)? */
+function isEnglishDominant(text: string): boolean {
+  const cjk = (text.match(/[一-鿿]/g) || []).length;
+  const latin = (text.match(/[a-zA-Z]/g) || []).length;
+  if (latin < 20) return false; // too little Latin to bother
+  // Mostly-English if Chinese chars are a small minority of "meaningful" chars.
+  return cjk < latin * 0.25;
+}
+
+async function maybeTranslateToZh(text: string): Promise<string> {
+  if (!isEnglishDominant(text)) return text;
+  const cfg = await loadTranslateConfig();
+  if (!cfg) return text;
+  try {
+    const res = await fetch(`${cfg.base_url.replace(/\/$/, "")}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${cfg.api_key}`,
+      },
+      body: JSON.stringify({
+        model: cfg.model,
+        messages: [
+          {
+            role: "system",
+            content:
+              "你是翻译器。把用户给的英文（可能含技术术语 / SQL / 变量名 / SKU 代码）翻成简体中文。" +
+              "保留专有名词、代码、数字、SKU 不翻。只输出译文，不要解释，不要加引号。",
+          },
+          { role: "user", content: text },
+        ],
+        temperature: 0,
+        max_tokens: 800,
+      }),
+    });
+    if (!res.ok) {
+      log.warn(`translate failed: HTTP ${res.status}`);
+      return text;
+    }
+    const body = (await res.json()) as {
+      choices?: Array<{ message?: { content?: string } }>;
+    };
+    const translated = body.choices?.[0]?.message?.content?.trim();
+    return translated && translated.length > 0 ? translated : text;
+  } catch (err) {
+    log.warn("translate error:", err);
+    return text;
+  }
 }
 
 // ─── Public API ──────────────────────────────────────────────────────────
@@ -498,10 +586,11 @@ async function handleRunLogEvent(payload: {
     lastNarrationAt.set(agentId, now);
     lastNarrationText.set(agentId, text);
 
+    const zh = await maybeTranslateToZh(text);
     const title = `💭 ${labelForChannel(match.channelName)} 正在思考`;
-    const body = abbreviate(text, 700);
+    const body = abbreviate(zh, 700);
     await pushMarkdown(match.entry, title, body);
-    log.info(`pushed narration card → agent=${agentId} bytes=${text.length}`);
+    log.info(`pushed narration card → agent=${agentId} bytes=${zh.length}${zh !== text ? " (translated)" : ""}`);
   } catch (err) {
     log.warn(`handleRunLogEvent failed (agent=${agentId}):`, err);
   }
