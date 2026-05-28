@@ -302,9 +302,108 @@ export async function broadcastIssueDone(
 // Skipped silently if channel is concierge or registry entry missing.
 
 const NARRATION_THROTTLE_MS = 35_000;
+const TOOL_USE_THROTTLE_MS = 15_000;
 const lastNarrationAt = new Map<string, number>(); // agentId → last push ts
 const lastNarrationText = new Map<string, string>(); // agentId → last pushed text (dedup)
+const lastToolUseAt = new Map<string, number>(); // agentId → last tool push ts
+const lastToolUseNames = new Map<string, string>(); // agentId → last pushed tool names (dedup)
 const subscribedCompanies = new Set<string>();
+
+interface ToolUse {
+  name: string;
+  args: string; // pretty-formatted arg summary (truncated)
+}
+
+function summarizeToolArgs(input: unknown): string {
+  if (!input || typeof input !== "object") return "";
+  const entries = Object.entries(input as Record<string, unknown>);
+  if (entries.length === 0) return "";
+  const pieces: string[] = [];
+  for (const [k, v] of entries) {
+    let display: string;
+    if (typeof v === "string") {
+      display = v.length > 30 ? `${v.slice(0, 28)}…` : v;
+      display = `"${display}"`;
+    } else if (typeof v === "number" || typeof v === "boolean") {
+      display = String(v);
+    } else if (Array.isArray(v)) {
+      display = `[${v.length}]`;
+    } else if (v === null) {
+      display = "null";
+    } else {
+      display = "{…}";
+    }
+    pieces.push(`${k}=${display}`);
+    if (pieces.join(", ").length > 90) break;
+  }
+  return pieces.join(", ");
+}
+
+function extractToolUsesFromChunk(rawChunk: string): ToolUse[] {
+  if (!rawChunk || rawChunk.length === 0) return [];
+  const lines = rawChunk.split("\n");
+  const tools: ToolUse[] = [];
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith("{")) continue;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(trimmed);
+    } catch {
+      continue;
+    }
+    const ev = parsed as { type?: string; message?: { content?: unknown } };
+    if (ev.type !== "assistant") continue;
+    const content = (ev.message as { content?: unknown } | undefined)?.content;
+    if (!Array.isArray(content)) continue;
+    for (const block of content) {
+      if (!block || typeof block !== "object") continue;
+      const b = block as { type?: string; name?: string; input?: unknown };
+      if (b.type === "tool_use" && typeof b.name === "string") {
+        // Trim MCP prefix for readability: mcp__paperclip-data__dws_returnsBySku → dws_returnsBySku
+        const shortName = b.name.replace(/^mcp__[^_]+__/, "");
+        tools.push({ name: shortName, args: summarizeToolArgs(b.input) });
+      }
+    }
+  }
+  return tools;
+}
+
+async function handleToolUseFromChunk(
+  agentId: string,
+  rawChunk: string,
+): Promise<void> {
+  const now = Date.now();
+  const lastAt = lastToolUseAt.get(agentId) ?? 0;
+  if (now - lastAt < TOOL_USE_THROTTLE_MS) return;
+
+  const tools = extractToolUsesFromChunk(rawChunk);
+  if (tools.length === 0) return;
+
+  // Dedup against the exact set of tool names just pushed.
+  const namesKey = tools.map((t) => t.name).sort().join("|");
+  if (lastToolUseNames.get(agentId) === namesKey) return;
+
+  try {
+    const match = await lookupChannelByAgent(agentId);
+    if (!match) return;
+    if (match.channelName === "concierge") return;
+
+    lastToolUseAt.set(agentId, now);
+    lastToolUseNames.set(agentId, namesKey);
+
+    const title = `🔧 ${labelForChannel(match.channelName)} 调用工具`;
+    const lines = tools.slice(0, 6).map((t) => {
+      const argPart = t.args ? ` \`${t.args}\`` : "";
+      return `- \`${t.name}\`${argPart}`;
+    });
+    if (tools.length > 6) lines.push(`- _… 还有 ${tools.length - 6} 个_`);
+    await pushMarkdown(match.entry, title, lines.join("\n"));
+    log.info(`pushed tool_use card → agent=${agentId} tools=${tools.length}`);
+  } catch (err) {
+    log.warn(`handleToolUseFromChunk failed (agent=${agentId}):`, err);
+  }
+}
 
 function extractNarrationFromChunk(rawChunk: string): string | null {
   // Each `heartbeat.run.log` payload is a concatenation of one or more NDJSON
@@ -357,6 +456,10 @@ async function handleRunLogEvent(payload: {
 }): Promise<void> {
   if (!payload?.agentId || payload.stream !== "stdout" || !payload.chunk) return;
   const agentId = payload.agentId;
+
+  // Tool-use detection runs every event (its own throttle); it's cheap and
+  // doesn't depend on the narration throttle.
+  void handleToolUseFromChunk(agentId, payload.chunk);
 
   const now = Date.now();
   const lastAt = lastNarrationAt.get(agentId) ?? 0;
