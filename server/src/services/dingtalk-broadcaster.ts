@@ -23,6 +23,8 @@ import { promises as fs } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
+import { subscribeCompanyLiveEvents } from "./live-events.js";
+
 const REGISTRY_PATH = join(homedir(), ".paperclip", "dingtalk-channels.json");
 const TOKEN_URL = "https://api.dingtalk.com/v1.0/oauth2/accessToken";
 const PUSH_URL = "https://api.dingtalk.com/v1.0/robot/groupMessages/send";
@@ -290,4 +292,110 @@ export async function broadcastIssueDone(
   } catch (err) {
     log.warn(`broadcastIssueDone failed (issue=${issue.id}):`, err);
   }
+}
+
+// ─── Narration stream subscription ──────────────────────────────────────
+//
+// Subscribes to `heartbeat.run.log` live events (one per Claude SDK stdout
+// chunk) and extracts user-visible narration (assistant text + thinking
+// blocks). Throttled per-agent so a chatty agent doesn't spam its group.
+// Skipped silently if channel is concierge or registry entry missing.
+
+const NARRATION_THROTTLE_MS = 35_000;
+const lastNarrationAt = new Map<string, number>(); // agentId → last push ts
+const lastNarrationText = new Map<string, string>(); // agentId → last pushed text (dedup)
+const subscribedCompanies = new Set<string>();
+
+function extractNarrationFromChunk(rawChunk: string): string | null {
+  // Each `heartbeat.run.log` payload is a concatenation of one or more NDJSON
+  // lines from a Claude SDK stream. We parse line-by-line and look for the
+  // most recent assistant text. Defensive: ignore malformed JSON, tool_use,
+  // tool_result, system events.
+  if (!rawChunk || rawChunk.length === 0) return null;
+  const lines = rawChunk.split("\n");
+  let latest: string | null = null;
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith("{")) continue;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(trimmed);
+    } catch {
+      continue;
+    }
+    if (!parsed || typeof parsed !== "object") continue;
+    const ev = parsed as { type?: string; message?: { content?: unknown } };
+    if (ev.type !== "assistant") continue;
+    const content = (ev.message as { content?: unknown } | undefined)?.content;
+    if (!Array.isArray(content)) continue;
+    const pieces: string[] = [];
+    for (const block of content) {
+      if (!block || typeof block !== "object") continue;
+      const b = block as { type?: string; text?: string; thinking?: string };
+      if (b.type === "text" && typeof b.text === "string" && b.text.trim()) {
+        pieces.push(b.text.trim());
+      }
+      if (b.type === "thinking" && typeof b.thinking === "string" && b.thinking.trim()) {
+        // Thinking blocks are usually long internal monologue — take last 2 sentences
+        // to keep the card readable.
+        const t = b.thinking.trim();
+        const sentences = t.split(/(?<=[。!?\.])\s*/).filter((s) => s.length > 0);
+        pieces.push(sentences.slice(-2).join(" "));
+      }
+    }
+    if (pieces.length > 0) {
+      latest = pieces.join("\n\n");
+    }
+  }
+  return latest;
+}
+
+async function handleRunLogEvent(payload: {
+  agentId?: string;
+  stream?: string;
+  chunk?: string;
+}): Promise<void> {
+  if (!payload?.agentId || payload.stream !== "stdout" || !payload.chunk) return;
+  const agentId = payload.agentId;
+
+  const now = Date.now();
+  const lastAt = lastNarrationAt.get(agentId) ?? 0;
+  if (now - lastAt < NARRATION_THROTTLE_MS) return; // cheap pre-filter before parse
+
+  const text = extractNarrationFromChunk(payload.chunk);
+  if (!text || text.length < 20) return; // skip noise
+
+  const lastText = lastNarrationText.get(agentId);
+  if (lastText === text) return; // dedup identical
+
+  try {
+    const match = await lookupChannelByAgent(agentId);
+    if (!match) return;
+    if (match.channelName === "concierge") return;
+
+    lastNarrationAt.set(agentId, now);
+    lastNarrationText.set(agentId, text);
+
+    const title = `💭 ${labelForChannel(match.channelName)} 正在思考`;
+    const body = abbreviate(text, 700);
+    await pushMarkdown(match.entry, title, body);
+    log.info(`pushed narration card → agent=${agentId} bytes=${text.length}`);
+  } catch (err) {
+    log.warn(`handleRunLogEvent failed (agent=${agentId}):`, err);
+  }
+}
+
+/**
+ * Subscribe to a company's live events to relay Claude SDK narration into
+ * the bound DingTalk group as "💭 思考中" cards. Idempotent per company.
+ * Call once on server startup per company.
+ */
+export function initBroadcasterSubscriptions(companyId: string): void {
+  if (subscribedCompanies.has(companyId)) return;
+  subscribedCompanies.add(companyId);
+  subscribeCompanyLiveEvents(companyId, (event) => {
+    if (event.type !== "heartbeat.run.log") return;
+    void handleRunLogEvent(event.payload as { agentId?: string; stream?: string; chunk?: string });
+  });
+  log.info(`subscribed to heartbeat.run.log stream for company=${companyId}`);
 }

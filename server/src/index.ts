@@ -47,6 +47,7 @@ import { getBoardClaimWarningUrl, initializeBoardClaimChallenge } from "./board-
 import { maybePersistWorktreeRuntimePorts } from "./worktree-config.js";
 import { initTelemetry, getTelemetryClient } from "./telemetry.js";
 import { conflict } from "./errors.js";
+import { initBroadcasterSubscriptions } from "./services/dingtalk-broadcaster.js";
 import type {
   InstanceDatabaseBackupRunResult,
   InstanceDatabaseBackupTrigger,
@@ -260,6 +261,12 @@ export async function startServer(): Promise<StartedServer> {
         status: "active",
         membershipRole: "owner",
       });
+    }
+    // Phase 6.1 — wire DingTalk broadcaster to each company's live event stream.
+    // Subscribes to heartbeat.run.log so Claude SDK narration ("数据已获取，
+    // 正在聚合...") relays into the bound business-agent group in real time.
+    for (const company of companyRows) {
+      initBroadcasterSubscriptions(company.id);
     }
   }
   
