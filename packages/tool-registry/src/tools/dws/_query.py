@@ -65,7 +65,22 @@ def connect():
     )
 
 
-def return_reasons(conn, account: str, since: str, sku: str | None, top: int) -> list[dict[str, Any]]:
+def resolve_account_id(conn, account: str) -> int:
+    # dws_od_amazon_refund_rate_d only carries numeric accountId; dm_allretrun_analysis_d
+    # is the single source that maps the Account string -> accountId.
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT accountId FROM dm_allretrun_analysis_d "
+            "WHERE Account = %(account)s AND accountId IS NOT NULL LIMIT 1",
+            {"account": account},
+        )
+        row = cur.fetchone()
+    if not row or row.get("accountId") is None:
+        emit({"error": "ValidationError", "message": f"unknown account: {account!r} (no accountId mapping)"}, 1)
+    return int(row["accountId"])
+
+
+def return_reasons(conn, account_id: int, since: str, sku: str | None, top: int) -> list[dict[str, Any]]:
     sql = """
         SELECT
             return_reason AS returnReason,
@@ -73,13 +88,21 @@ def return_reasons(conn, account: str, since: str, sku: str | None, top: int) ->
             COUNT(DISTINCT sku) AS skuCount,
             COUNT(DISTINCT orderid) AS orderCount,
             CAST(COALESCE(SUM(quantity), 0) AS DECIMAL(20,0)) AS unitsReturned
-        FROM dm_allretrun_analysis_d
-        WHERE Account = %(account)s
-          AND date >= %(since)s
+        FROM (
+            SELECT
+                returnReason AS return_reason,
+                seller_sku AS sku,
+                amazon_order_id AS orderid,
+                quantity
+            FROM dws_od_amazon_refund_rate_d
+            WHERE accountId = %(account_id)s
+              AND check_date >= %(since)s
+        ) src
+        WHERE 1 = 1
           AND return_reason IS NOT NULL
           AND return_reason != ''
     """
-    params: dict[str, Any] = {"account": account, "since": since}
+    params: dict[str, Any] = {"account_id": account_id, "since": since}
     if sku:
         sql += " AND sku = %(sku)s"
         params["sku"] = sku
@@ -90,19 +113,27 @@ def return_reasons(conn, account: str, since: str, sku: str | None, top: int) ->
         return [serialize_row(r) for r in cur.fetchall()]
 
 
-def returns_by_sku(conn, account: str, since: str, top: int) -> list[dict[str, Any]]:
+def returns_by_sku(conn, account_id: int, since: str, top: int) -> list[dict[str, Any]]:
     # Per-SKU return totals + their dominant reason via window function.
     sql = """
-        WITH sku_totals AS (
+        WITH src AS (
+            SELECT
+                seller_sku AS sku,
+                returnReason AS return_reason,
+                amazon_order_id AS orderid,
+                quantity
+            FROM dws_od_amazon_refund_rate_d
+            WHERE accountId = %(account_id)s
+              AND check_date >= %(since)s
+        ),
+        sku_totals AS (
             SELECT
                 sku,
                 COUNT(*) AS returnCount,
                 CAST(COALESCE(SUM(quantity), 0) AS DECIMAL(20,0)) AS unitsReturned,
                 COUNT(DISTINCT orderid) AS orderCount
-            FROM dm_allretrun_analysis_d
-            WHERE Account = %(account)s
-              AND date >= %(since)s
-              AND sku IS NOT NULL AND sku != ''
+            FROM src
+            WHERE sku IS NOT NULL AND sku != ''
             GROUP BY sku
         ),
         reason_per_sku AS (
@@ -110,10 +141,8 @@ def returns_by_sku(conn, account: str, since: str, top: int) -> list[dict[str, A
                    ROW_NUMBER() OVER (PARTITION BY sku ORDER BY ct DESC) AS rn
             FROM (
                 SELECT sku, return_reason, COUNT(*) AS ct
-                FROM dm_allretrun_analysis_d
-                WHERE Account = %(account)s
-                  AND date >= %(since)s
-                  AND sku IS NOT NULL AND sku != ''
+                FROM src
+                WHERE sku IS NOT NULL AND sku != ''
                   AND return_reason IS NOT NULL AND return_reason != ''
                 GROUP BY sku, return_reason
             ) t
@@ -131,7 +160,7 @@ def returns_by_sku(conn, account: str, since: str, top: int) -> list[dict[str, A
         LIMIT %(top)s
     """
     with conn.cursor() as cur:
-        cur.execute(sql, {"account": account, "since": since, "top": top})
+        cur.execute(sql, {"account_id": account_id, "since": since, "top": top})
         return [serialize_row(r) for r in cur.fetchall()]
 
 
@@ -192,7 +221,7 @@ def refund_comments(conn, account: str, since: str, sku_prefix: str | None, limi
         return [serialize_row(r) for r in cur.fetchall()]
 
 
-def return_trend(conn, account: str, since: str, until: str, granularity: str) -> list[dict[str, Any]]:
+def return_trend(conn, account_id: int, since: str, until: str, granularity: str) -> list[dict[str, Any]]:
     if granularity == "week":
         bucket_expr = "DATE_FORMAT(date, '%%x-W%%v')"
     elif granularity == "month":
@@ -202,46 +231,61 @@ def return_trend(conn, account: str, since: str, until: str, granularity: str) -
     else:
         emit({"error": "ValidationError", "message": f"granularity must be day/week/month, got {granularity!r}"}, 1)
     sql = f"""
+        WITH src AS (
+            SELECT
+                check_date AS date,
+                seller_sku AS sku,
+                amazon_order_id AS orderid,
+                quantity
+            FROM dws_od_amazon_refund_rate_d
+            WHERE accountId = %(account_id)s
+              AND check_date >= %(since)s
+              AND check_date < %(until)s
+        )
         SELECT
             {bucket_expr} AS period,
             COUNT(*) AS returnCount,
             CAST(COALESCE(SUM(quantity), 0) AS DECIMAL(20,0)) AS unitsReturned,
             COUNT(DISTINCT sku) AS skuCount,
             COUNT(DISTINCT orderid) AS orderCount
-        FROM dm_allretrun_analysis_d
-        WHERE Account = %(account)s
-          AND date >= %(since)s
-          AND date < %(until)s
-          AND sku IS NOT NULL AND sku != ''
+        FROM src
+        WHERE sku IS NOT NULL AND sku != ''
         GROUP BY period
         ORDER BY period
     """
     with conn.cursor() as cur:
-        cur.execute(sql, {"account": account, "since": since, "until": until})
+        cur.execute(sql, {"account_id": account_id, "since": since, "until": until})
         return [serialize_row(r) for r in cur.fetchall()]
 
 
-def skus_by_reason(conn, account: str, since: str, reasons: list[str], top: int) -> list[dict[str, Any]]:
+def skus_by_reason(conn, account_id: int, since: str, reasons: list[str], top: int) -> list[dict[str, Any]]:
     if not reasons:
         emit({"error": "ValidationError", "message": "reasons must be a non-empty list of reason codes"}, 1)
     placeholders = ",".join([f"%(r{i})s" for i in range(len(reasons))])
     sql = f"""
+        WITH src AS (
+            SELECT
+                seller_sku AS sku,
+                returnReason AS return_reason,
+                quantity
+            FROM dws_od_amazon_refund_rate_d
+            WHERE accountId = %(account_id)s
+              AND check_date >= %(since)s
+        )
         SELECT
             sku,
             SUM(CASE WHEN return_reason IN ({placeholders}) THEN 1 ELSE 0 END) AS reasonReturnCount,
             CAST(SUM(CASE WHEN return_reason IN ({placeholders}) THEN COALESCE(quantity, 0) ELSE 0 END) AS DECIMAL(20,0)) AS reasonUnitsReturned,
             COUNT(*) AS totalReturnCount,
             CAST(COALESCE(SUM(quantity), 0) AS DECIMAL(20,0)) AS totalUnitsReturned
-        FROM dm_allretrun_analysis_d
-        WHERE Account = %(account)s
-          AND date >= %(since)s
-          AND sku IS NOT NULL AND sku != ''
+        FROM src
+        WHERE sku IS NOT NULL AND sku != ''
         GROUP BY sku
         HAVING reasonReturnCount > 0
         ORDER BY reasonReturnCount DESC
         LIMIT %(top)s
     """
-    params: dict[str, Any] = {"account": account, "since": since, "top": top}
+    params: dict[str, Any] = {"account_id": account_id, "since": since, "top": top}
     for i, r in enumerate(reasons):
         params[f"r{i}"] = r
     with conn.cursor() as cur:
@@ -267,17 +311,19 @@ def main() -> None:
 
     try:
         if op == "returnReasons":
+            account_id = resolve_account_id(conn, req["account"])
             rows = return_reasons(
                 conn,
-                account=req["account"],
+                account_id=account_id,
                 since=req["since"],
                 sku=req.get("sku"),
                 top=int(req.get("top", 10)),
             )
         elif op == "returnsBySku":
+            account_id = resolve_account_id(conn, req["account"])
             rows = returns_by_sku(
                 conn,
-                account=req["account"],
+                account_id=account_id,
                 since=req["since"],
                 top=int(req.get("top", 20)),
             )
@@ -298,17 +344,19 @@ def main() -> None:
                 limit=int(req.get("limit", 20)),
             )
         elif op == "returnTrend":
+            account_id = resolve_account_id(conn, req["account"])
             rows = return_trend(
                 conn,
-                account=req["account"],
+                account_id=account_id,
                 since=req["since"],
                 until=req["until"],
                 granularity=req.get("granularity", "week"),
             )
         elif op == "skusByReason":
+            account_id = resolve_account_id(conn, req["account"])
             rows = skus_by_reason(
                 conn,
-                account=req["account"],
+                account_id=account_id,
                 since=req["since"],
                 reasons=req.get("reasons") or [],
                 top=int(req.get("top", 10)),
