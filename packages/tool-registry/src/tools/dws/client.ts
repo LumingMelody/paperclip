@@ -6,6 +6,7 @@ import { runPythonHelper } from "../../subprocess.js";
 export type DwsQueryRequest =
   | { op: "returnReasons"; account: string; since: string; sku?: string; top?: number }
   | { op: "returnsBySku"; account: string; since: string; top?: number }
+  | { op: "returnRateByStyle"; account: string; since: string; top?: number; minQty?: number }
   | { op: "returnDetail"; account: string; sku: string; since: string; limit?: number }
   | { op: "refundComments"; account: string; since: string; skuPrefix?: string; limit?: number }
   | { op: "returnTrend"; account: string; since: string; until: string; granularity?: "day" | "week" | "month" }

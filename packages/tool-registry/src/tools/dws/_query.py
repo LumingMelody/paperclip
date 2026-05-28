@@ -164,6 +164,34 @@ def returns_by_sku(conn, account_id: int, since: str, top: int) -> list[dict[str
         return [serialize_row(r) for r in cur.fetchall()]
 
 
+def return_rate_by_style(conn, account_id: int, since: str, top: int, min_qty: int) -> list[dict[str, Any]]:
+    sql = """
+        SELECT
+            sku_left7 AS styleCode,
+            CAST(COALESCE(SUM(quantity),0) AS DECIMAL(20,0)) AS salesQty,
+            CAST(COALESCE(SUM(rf_quantity),0) AS DECIMAL(20,0)) AS returnQty,
+            COUNT(DISTINCT seller_sku) AS skuCount
+        FROM dws_od_amazon_refund_rate_d
+        WHERE accountId=%(account_id)s AND check_date>=%(since)s
+              AND sku_left7 IS NOT NULL AND sku_left7!=''
+        GROUP BY sku_left7
+        HAVING salesQty >= %(min_qty)s
+        ORDER BY (SUM(rf_quantity)/NULLIF(SUM(quantity),0)) DESC
+        LIMIT %(top)s
+    """
+    with conn.cursor() as cur:
+        cur.execute(sql, {"account_id": account_id, "since": since, "top": top, "min_qty": min_qty})
+        rows = cur.fetchall()
+    out = []
+    for r in rows:
+        row = serialize_row(r)
+        sales_qty = float(row["salesQty"])
+        return_qty = float(row["returnQty"])
+        row["returnRate"] = round(return_qty / sales_qty, 4)
+        out.append(row)
+    return out
+
+
 def return_detail(conn, account: str, sku: str, since: str, limit: int) -> list[dict[str, Any]]:
     sql = """
         SELECT
@@ -326,6 +354,15 @@ def main() -> None:
                 account_id=account_id,
                 since=req["since"],
                 top=int(req.get("top", 20)),
+            )
+        elif op == "returnRateByStyle":
+            account_id = resolve_account_id(conn, req["account"])
+            rows = return_rate_by_style(
+                conn,
+                account_id=account_id,
+                since=req["since"],
+                top=int(req.get("top", 20)),
+                min_qty=int(req.get("minQty", 50)),
             )
         elif op == "returnDetail":
             rows = return_detail(

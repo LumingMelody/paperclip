@@ -10,6 +10,7 @@ import { styleSummaryDescriptor } from "./tools/lingxing/styleSummary.js";
 import { stockoutRiskDescriptor } from "./tools/lingxing/stockoutRisk.js";
 import { topSkusDescriptor } from "./tools/lingxing/topSkus.js";
 import { returnReasonsDescriptor } from "./tools/dws/returnReasons.js";
+import { returnRateByStyleDescriptor } from "./tools/dws/returnRateByStyle.js";
 import { returnsBySkuDescriptor } from "./tools/dws/returnsBySku.js";
 import { returnDetailDescriptor } from "./tools/dws/returnDetail.js";
 import { refundCommentsDescriptor } from "./tools/dws/refundComments.js";
@@ -50,6 +51,7 @@ export const tools: ToolDescriptor[] = [
   topSkusDescriptor,
   stockoutRiskDescriptor,
   returnReasonsDescriptor,
+  returnRateByStyleDescriptor,
   returnsBySkuDescriptor,
   returnDetailDescriptor,
   refundCommentsDescriptor,
