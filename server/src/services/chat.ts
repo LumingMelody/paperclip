@@ -13,6 +13,7 @@ import { and, eq, gt, inArray, notInArray } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import { issueComments, issues } from "@paperclipai/db";
 import { queueIssueAssignmentWakeup } from "./issue-assignment-wakeup.js";
+import { broadcastIssueAssigned } from "./dingtalk-broadcaster.js";
 
 export interface ChatServiceDeps {
   db: Db;
@@ -116,6 +117,21 @@ export function chatService(deps: ChatServiceDeps) {
         mutation: "chat.handleIncoming",
         contextSource: "chat",
       });
+
+      // 4) Phase 6.1 — if this is a NEW chat issue routed to a non-Concierge
+      //    business agent (Finance / Supply / ...), broadcast a "🎯 接到任务"
+      //    card to that agent's bound DingTalk group. broadcaster skips
+      //    Concierge channel + handles all error cases silently.
+      if (created) {
+        const titleSlice = input.text.slice(0, 80);
+        void broadcastIssueAssigned({
+          id: issueId,
+          title: titleSlice,
+          parentId: null,
+          assigneeAgentId: effectiveAgentId,
+          status: "todo",
+        });
+      }
 
       return { issueId, created };
     },

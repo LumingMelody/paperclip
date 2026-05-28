@@ -176,32 +176,86 @@ export interface BroadcastIssue {
 }
 
 /**
- * Sub-issue assigned to a business agent — push "🎯 接到任务".
+ * Issue assigned to a business agent — push "🎯 接到任务".
+ *
+ * Fires for both:
+ *  - sub-issues (parentId set) — Concierge dispatched to a business agent
+ *  - top-level issues assigned to a non-Concierge agent — direct-route @ in
+ *    a per-channel bot's group (Phase 6 multi-channel)
  *
  * Skipped if:
  * - assigneeAgentId is null (unassigned issue)
- * - parentId is null (top-level issue — the user-facing one, already
- *   handled by Concierge bot's polling reply path)
  * - no matching registry entry (channel not provisioned)
+ * - channel name is "concierge" (Concierge owns its own group reply path —
+ *   broadcasting would duplicate the bot's own "🤔 思考中" + final answer)
  */
 export async function broadcastIssueAssigned(issue: BroadcastIssue): Promise<void> {
   try {
     if (!issue.assigneeAgentId) return;
-    if (!issue.parentId) return; // only sub-issues
     const match = await lookupChannelByAgent(issue.assigneeAgentId);
     if (!match) return;
+    if (match.channelName === "concierge") return; // Concierge bot handles its group
     const title = `🎯 ${labelForChannel(match.channelName)} 接到任务`;
+    const dispatchNote = issue.parentId
+      ? "_由 Concierge 派单 · 处理中..._"
+      : "_直接路由 · 处理中..._";
     const text = [
       `**${abbreviate(issue.title ?? "(untitled)", 80)}**`,
       "",
       `issue: \`${issue.id}\``,
       "",
-      "_由 Concierge 派单 · 处理中..._",
+      dispatchNote,
     ].join("\n");
     await pushMarkdown(match.entry, title, text);
     log.info(`pushed assigned card → agent=${issue.assigneeAgentId} issue=${issue.id}`);
   } catch (err) {
     log.warn(`broadcastIssueAssigned failed (issue=${issue.id}):`, err);
+  }
+}
+
+/**
+ * Agent wrote a comment to its own issue → push "📝 <Agent>: <excerpt>".
+ *
+ * Throttled per-issue (one push every PROGRESS_THROTTLE_MS) to avoid spamming
+ * groups when an agent emits many comments in quick succession during a run.
+ * Skipped if:
+ * - comment author is not the issue's assigneeAgentId (e.g. user follow-up)
+ * - issue's assignee has no channel (channel not provisioned)
+ * - channel name is "concierge" (Concierge bot handles its own group reply)
+ */
+const PROGRESS_THROTTLE_MS = 25_000;
+const lastProgressPushAt = new Map<string, number>();
+
+export async function broadcastIssueProgress(
+  issue: BroadcastIssue,
+  comment: { id: string; body: string | null; authorAgentId: string | null },
+): Promise<void> {
+  try {
+    if (!issue.assigneeAgentId) return;
+    if (!comment.body || comment.body.trim().length === 0) return;
+    if (comment.authorAgentId !== issue.assigneeAgentId) return; // only agent's own progress notes
+
+    const now = Date.now();
+    const lastAt = lastProgressPushAt.get(issue.id) ?? 0;
+    if (now - lastAt < PROGRESS_THROTTLE_MS) return;
+
+    const match = await lookupChannelByAgent(issue.assigneeAgentId);
+    if (!match) return;
+    if (match.channelName === "concierge") return; // Concierge bot owns its group reply path
+
+    lastProgressPushAt.set(issue.id, now);
+    const title = `📝 ${labelForChannel(match.channelName)} 进度`;
+    const text = [
+      `**${abbreviate(issue.title ?? "(untitled)", 60)}**`,
+      "",
+      abbreviate(comment.body, 600),
+      "",
+      `_issue: \`${issue.id}\`_`,
+    ].join("\n");
+    await pushMarkdown(match.entry, title, text);
+    log.info(`pushed progress card → agent=${issue.assigneeAgentId} issue=${issue.id}`);
+  } catch (err) {
+    log.warn(`broadcastIssueProgress failed (issue=${issue.id}):`, err);
   }
 }
 
@@ -214,9 +268,15 @@ export async function broadcastIssueDone(
 ): Promise<void> {
   try {
     if (!issue.assigneeAgentId) return;
-    if (!issue.parentId) return; // only sub-issues
     const match = await lookupChannelByAgent(issue.assigneeAgentId);
     if (!match) return;
+    if (match.channelName === "concierge") return; // Concierge bot pushes its own done reply
+    // For top-level direct-route issues, the per-channel bot will ALSO push the
+    // final answer via its poll path — we skip the broadcaster's done card to
+    // avoid posting the same content twice. For sub-issues (parentId set),
+    // the dispatching bot polls the PARENT, not this sub-issue, so no
+    // duplication risk.
+    if (!issue.parentId) return;
     const title = `✅ ${labelForChannel(match.channelName)} 完成`;
     const text = [
       `**${abbreviate(issue.title ?? "(untitled)", 80)}**`,

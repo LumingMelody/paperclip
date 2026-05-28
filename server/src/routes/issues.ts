@@ -39,6 +39,7 @@ import { getTelemetryClient } from "../telemetry.js";
 import {
   broadcastIssueAssigned,
   broadcastIssueDone,
+  broadcastIssueProgress,
 } from "../services/dingtalk-broadcaster.js";
 import type { StorageService } from "../storage/types.js";
 import { validate } from "../middleware/validate.js";
@@ -3791,6 +3792,22 @@ export function issueRoutes(
       userId: actor.actorType === "user" ? actor.actorId : undefined,
       runId: actor.runId,
     });
+    // Phase 6.1 — broadcast agent's progress comments to its bound DingTalk
+    // group (throttled, skipped for Concierge / user-authored / non-assignee).
+    void broadcastIssueProgress(
+      {
+        id: currentIssue.id,
+        title: currentIssue.title,
+        parentId: currentIssue.parentId ?? null,
+        assigneeAgentId: currentIssue.assigneeAgentId ?? null,
+        status: currentIssue.status,
+      },
+      {
+        id: comment.id,
+        body: comment.body ?? null,
+        authorAgentId: comment.authorAgentId ?? null,
+      },
+    );
     await issueReferencesSvc.syncComment(comment.id);
     const commentReferenceSummaryAfter = await issueReferencesSvc.listIssueReferenceSummary(currentIssue.id);
     const commentReferenceDiff = issueReferencesSvc.diffIssueReferenceSummary(
