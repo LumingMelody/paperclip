@@ -387,7 +387,8 @@ async function handleToolUseFromChunk(
   try {
     const match = await lookupChannelByAgent(agentId);
     if (!match) return;
-    if (match.channelName === "concierge") return;
+    // NOTE: Concierge IS allowed here — narration + tool_use are unique to
+    // the broadcaster path; bot's 🤔/final-answer don't carry this content.
 
     lastToolUseAt.set(agentId, now);
     lastToolUseNames.set(agentId, namesKey);
@@ -474,7 +475,8 @@ async function handleRunLogEvent(payload: {
   try {
     const match = await lookupChannelByAgent(agentId);
     if (!match) return;
-    if (match.channelName === "concierge") return;
+    // NOTE: Concierge IS allowed for narration — covers the case where
+    // Concierge does work itself (not always dispatched to sub-agents).
 
     lastNarrationAt.set(agentId, now);
     lastNarrationText.set(agentId, text);
