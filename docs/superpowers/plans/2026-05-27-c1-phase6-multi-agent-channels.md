@@ -345,6 +345,85 @@ paperclip 仓库（这边）/docs/
 
 ---
 
+---
+
+## Phase 6.1 — 业务 agent 在群里"活起来"（autoloop in-scope addition, 2026-05-28）
+
+User explicitly requested ("做 6.1") to surface sub-issue lifecycle in DingTalk
+so the demo shows business agents broadcasting "我接到任务 / 我完成了" instead
+of staying silent until Concierge aggregates. This was originally deferred
+per spike spec but pulled into the autoloop because it's small (~300 LOC)
+and high-leverage for the demo.
+
+**Architecture:**
+
+```
+Concierge agent  ──POST /issues/<parent>/children──>  paperclip server
+                                                          │
+                              broadcastIssueAssigned() ◄──┤ (fire-and-forget)
+                                       │
+                                       ▼
+                       reads ~/.paperclip/dingtalk-channels.json
+                                       │
+                                       ▼
+            DingTalk Open API /v1.0/robot/groupMessages/send
+                                       │
+                                       ▼
+           "🎯 Finance 接到任务: EE02968 利润分析" lands in Finance group
+
+Finance agent finishes → PATCH /issues/<id> { status: "done" }
+                                                          │
+                              broadcastIssueDone() ◄──────┤
+                                       │
+                                       ▼
+            "✅ Finance 完成: <Finance's latest comment, abbreviated>"
+```
+
+### Task 6.1.1: server-side broadcaster
+
+- [x] **Step 1: `server/src/services/dingtalk-broadcaster.ts`** — token cache,
+  push function, registry lookup by agentId. TS rewrite of active_push.py
+  shape so paperclip server can call DingTalk Open API directly.
+- [x] **Step 2: 3 hook sites in `server/src/routes/issues.ts`**
+  - `POST /companies/:companyId/issues` → `broadcastIssueAssigned`
+  - `POST /issues/:id/children` → `broadcastIssueAssigned` (Concierge's actual path)
+  - `PATCH /issues/:id` → `broadcastIssueDone` when status transitions to done,
+    with a 5-comment lookback to find the agent's answer body.
+- [x] **Step 3: skip conditions** — parentId null (top-level), no registry
+  entry, empty robot_code/conv_id (bot hasn't received first @ yet),
+  network/HTTP errors (all silent, log warn only).
+- [x] **Step 4: tsc clean + commit (paperclip repo)**
+  - Commit: `feat(c1/phase6.1): server — DingTalk proactive broadcaster for sub-issue lifecycle`
+
+### Task 6.1.2: bot-side channel registry writer
+
+- [x] **Step 1: `paperclip-dingtalk-bot/channel_registry.py`** — each bot
+  upserts its (agent_id, app_key, app_secret, robot_code, conv_id) entry
+  in `~/.paperclip/dingtalk-channels.json`. fcntl.flock for safe
+  concurrent writes across 7 bot processes.
+- [x] **Step 2: wire upsert into `main.py`** — on startup (writes what
+  env knows) + on every incoming ChatbotMessage (auto-fills robot_code +
+  conv_id from `chatbot_msg.robot_code` / `.conversation_id`).
+- [x] **Step 3: restart all 7 bots; verify registry has all 7 entries**
+  - All 7 channels present in `~/.paperclip/dingtalk-channels.json` after
+    kickstart. concierge has full conv_id + robot_code (from env); 6
+    business channels have empty conv_id/robot_code until first @-mention.
+- [x] **Step 4: commit (bot repo)**
+  - Commit: `feat(bot): Phase 6.1 — write channel entry to ~/.paperclip/dingtalk-channels.json`
+
+### Task 6.1.3: end-to-end smoke (downstream of user @-mention)
+
+- [ ] **Step 1: user @ each business bot once** to populate registry's
+  robot_code + conv_id for that channel.
+- [ ] **Step 2: user @ Concierge with a Phase-5 complex question**
+  (e.g. `EG02084 该不该停售`); expect group to receive in order:
+  `🤔 思考中` (Concierge) → `🎯 Finance 接到任务` (broadcaster) →
+  `🎯 ProductSizing 接到任务` → `🎯 Supply 接到任务` →
+  `✅ Finance 完成 — <Finance answer>` → `✅ ProductSizing 完成` →
+  `✅ Supply 完成` → Concierge's final aggregated answer.
+
+---
+
 ## Self-Review 记录
 
 - **N-channel 设计核心是 env 驱动**：代码无 per-channel if-else 分支。新增第 8 个 channel = 加 .env.<channel> + 跑 install script，无需改任何代码。
