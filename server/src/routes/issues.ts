@@ -36,6 +36,10 @@ import {
 } from "@paperclipai/shared";
 import { trackAgentTaskCompleted } from "@paperclipai/shared/telemetry";
 import { getTelemetryClient } from "../telemetry.js";
+import {
+  broadcastIssueAssigned,
+  broadcastIssueDone,
+} from "../services/dingtalk-broadcaster.js";
 import type { StorageService } from "../storage/types.js";
 import { validate } from "../middleware/validate.js";
 import * as serviceIndex from "../services/index.js";
@@ -2063,6 +2067,14 @@ export function issueRoutes(
       requestedByActorId: actor.actorId,
     });
 
+    void broadcastIssueAssigned({
+      id: issue.id,
+      title: issue.title,
+      parentId: issue.parentId ?? null,
+      assigneeAgentId: issue.assigneeAgentId ?? null,
+      status: issue.status,
+    });
+
     res.status(201).json({
       ...issue,
       relatedWork: referenceSummary,
@@ -2122,6 +2134,14 @@ export function issueRoutes(
       contextSource: "issue.child_create",
       requestedByActorType: actor.actorType,
       requestedByActorId: actor.actorId,
+    });
+
+    void broadcastIssueAssigned({
+      id: issue.id,
+      title: issue.title,
+      parentId: issue.parentId ?? null,
+      assigneeAgentId: issue.assigneeAgentId ?? null,
+      status: issue.status,
     });
 
     res.status(201).json(issue);
@@ -2426,6 +2446,50 @@ export function issueRoutes(
     if (!issue) {
       res.status(404).json({ error: "Issue not found" });
       return;
+    }
+
+    // Phase 6.1 — sub-issue completed → broadcast "✅ <Agent> 完成" to the agent's
+    // bound DingTalk group. Fire-and-forget; broadcaster swallows its own errors.
+    if (existing.status !== "done" && issue.status === "done") {
+      const finishedIssue = issue;
+      void (async () => {
+        let latestAnswer: string | null = null;
+        try {
+          // listComments default order is desc — newest first.
+          const comments = await svc.listComments(finishedIssue.id, { order: "desc", limit: 5 });
+          for (const c of comments as Array<{ body?: string | null; authorAgentId?: string | null }>) {
+            if (
+              c?.body &&
+              c.body.trim().length > 0 &&
+              (!finishedIssue.assigneeAgentId || c.authorAgentId === finishedIssue.assigneeAgentId)
+            ) {
+              latestAnswer = c.body;
+              break;
+            }
+          }
+          // Fallback: any non-empty comment if no agent-authored one found.
+          if (!latestAnswer) {
+            for (const c of comments as Array<{ body?: string | null }>) {
+              if (c?.body && c.body.trim().length > 0) {
+                latestAnswer = c.body;
+                break;
+              }
+            }
+          }
+        } catch {
+          // best effort — broadcast with no body if comment fetch fails
+        }
+        await broadcastIssueDone(
+          {
+            id: finishedIssue.id,
+            title: finishedIssue.title,
+            parentId: finishedIssue.parentId ?? null,
+            assigneeAgentId: finishedIssue.assigneeAgentId ?? null,
+            status: finishedIssue.status,
+          },
+          latestAnswer,
+        );
+      })();
     }
 
     let cancelledStatusRunId: string | null = null;
