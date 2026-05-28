@@ -66,12 +66,12 @@ def connect():
 
 
 def resolve_account_id(conn, account: str) -> int:
-    # dws_od_amazon_refund_rate_d only carries numeric accountId; dm_allretrun_analysis_d
-    # is the single source that maps the Account string -> accountId.
+    # dws_od_amazon_refund_rate_d only carries numeric accountId; ods_sp_me_platform_account_m
+    # is the canonical store map (userAccount string -> accountId, 1:1).
     with conn.cursor() as cur:
         cur.execute(
-            "SELECT accountId FROM dm_allretrun_analysis_d "
-            "WHERE Account = %(account)s AND accountId IS NOT NULL LIMIT 1",
+            "SELECT accountId FROM ods_sp_me_platform_account_m "
+            "WHERE userAccount = %(account)s AND accountId IS NOT NULL LIMIT 1",
             {"account": account},
         )
         row = cur.fetchone()
