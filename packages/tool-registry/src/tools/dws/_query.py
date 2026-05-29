@@ -206,6 +206,27 @@ def return_rate_by_style(
     return out
 
 
+def site_top_styles(conn, account: str, since: str, top: int, style: str | None = None) -> list[dict[str, Any]]:
+    sql = """
+        SELECT
+            style AS styleCode,
+            CAST(COALESCE(SUM(qty),0) AS DECIMAL(20,0)) AS salesQty,
+            COUNT(DISTINCT LEFT(sku,32)) AS skuCount,
+            MAX(ProductTitle) AS productTitle
+        FROM dwa_od_shopify_sale_d
+        WHERE Account=%(account)s AND statistic_time_local>=%(since)s
+              AND style IS NOT NULL AND style<>'' AND style NOT LIKE '%%00000'
+    """
+    params: dict[str, Any] = {"account": account, "since": since, "top": top}
+    if style is not None:
+        sql += " AND style=%(style)s"
+        params["style"] = style
+    sql += " GROUP BY style ORDER BY salesQty DESC LIMIT %(top)s"
+    with conn.cursor() as cur:
+        cur.execute(sql, params)
+        return [serialize_row(r) for r in cur.fetchall()]
+
+
 def return_detail(conn, account: str, sku: str, since: str, limit: int) -> list[dict[str, Any]]:
     sql = """
         SELECT
@@ -377,6 +398,14 @@ def main() -> None:
                 since=req["since"],
                 top=int(req.get("top", 20)),
                 min_qty=int(req.get("minQty", 50)),
+                style=req.get("style"),
+            )
+        elif op == "siteTopStyles":
+            rows = site_top_styles(
+                conn,
+                account=req["account"],
+                since=req["since"],
+                top=int(req.get("top", 20)),
                 style=req.get("style"),
             )
         elif op == "returnDetail":
