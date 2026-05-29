@@ -1,4 +1,5 @@
 import * as childProcess from "node:child_process";
+import * as fs from "node:fs";
 import { z } from "zod";
 import {
   InternalError,
@@ -64,6 +65,33 @@ function timeoutError(timeoutMs: number): UpstreamError {
   return new UpstreamError(`python helper timed out after ${timeoutMs}ms`);
 }
 
+let cachedCaBundle: string | null | undefined;
+
+// Pick a CA bundle that exists on disk so urllib-based helpers can verify TLS
+// regardless of which virtualenv the MCP server was launched from. Keep a good
+// inherited SSL_CERT_FILE; otherwise fall back to a real system bundle. Returns
+// undefined when none found (leave python's own default in place).
+function resolveCaBundle(): string | undefined {
+  if (cachedCaBundle !== undefined) return cachedCaBundle ?? undefined;
+  const inherited = process.env.SSL_CERT_FILE;
+  if (inherited && fs.existsSync(inherited)) {
+    cachedCaBundle = inherited;
+    return inherited;
+  }
+  for (const candidate of [
+    "/etc/ssl/cert.pem", // macOS system bundle
+    "/etc/pki/tls/certs/ca-bundle.crt", // RHEL/Fedora
+    "/etc/ssl/certs/ca-certificates.crt", // Debian/Ubuntu
+  ]) {
+    if (fs.existsSync(candidate)) {
+      cachedCaBundle = candidate;
+      return candidate;
+    }
+  }
+  cachedCaBundle = null;
+  return undefined;
+}
+
 export async function runPythonHelper<I, O>(opts: PythonHelperOptions<I, O>): Promise<O> {
   const parsedRequest = requestSchema.safeParse(opts.request);
   if (!parsedRequest.success) {
@@ -79,6 +107,13 @@ export async function runPythonHelper<I, O>(opts: PythonHelperOptions<I, O>): Pr
       ...process.env,
       ...opts.envFromSecrets,
       PYTHONUNBUFFERED: "1",
+      // Force a CA bundle that actually exists on disk. The MCP server is often
+      // spawned from whatever project virtualenv was active, and can inherit a
+      // stale/broken SSL_CERT_FILE (→ urllib helpers like shopify/meta/spapi fail
+      // with "CERTIFICATE_VERIFY_FAILED unable to get local issuer certificate").
+      // resolveCaBundle() keeps a good inherited value, else picks a real system
+      // bundle; undefined means leave python's own default untouched.
+      ...(resolveCaBundle() ? { SSL_CERT_FILE: resolveCaBundle() as string } : {}),
     },
     stdio: ["pipe", "pipe", "pipe"],
     signal: controller.signal,
