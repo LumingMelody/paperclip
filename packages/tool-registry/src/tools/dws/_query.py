@@ -227,6 +227,66 @@ def site_top_styles(conn, account: str, since: str, top: int, style: str | None 
         return [serialize_row(r) for r in cur.fetchall()]
 
 
+def site_slow_movers(
+    conn,
+    account: str,
+    until: str | None,
+    window_days: int,
+    top: int,
+    min_qty: int,
+    sort: str,
+) -> list[dict[str, Any]]:
+    if sort not in ("decline", "slow"):
+        emit({"error": "ValidationError", "message": f"sort must be 'decline' or 'slow', got {sort!r}"}, 1)
+    anchor = "%(until)s" if until else "CURDATE()"
+    order_sql = "(recentQty - priorQty) ASC" if sort == "decline" else "recentQty ASC"
+    sql = f"""
+        WITH w AS (
+            SELECT
+                style,
+                SUM(CASE WHEN statistic_time_local >= DATE_SUB({anchor}, INTERVAL %(wd)s DAY)
+                          AND statistic_time_local < {anchor} THEN qty ELSE 0 END) AS recentQty,
+                SUM(CASE WHEN statistic_time_local >= DATE_SUB({anchor}, INTERVAL %(wd2)s DAY)
+                          AND statistic_time_local < DATE_SUB({anchor}, INTERVAL %(wd)s DAY) THEN qty ELSE 0 END) AS priorQty
+            FROM dwa_od_shopify_sale_d
+            WHERE Account=%(account)s
+              AND statistic_time_local >= DATE_SUB({anchor}, INTERVAL %(wd2)s DAY)
+              AND statistic_time_local < {anchor}
+              AND style IS NOT NULL AND style<>'' AND style NOT LIKE '%%00000'
+            GROUP BY style
+        )
+        SELECT
+            style AS styleCode,
+            CAST(recentQty AS DECIMAL(20,0)) AS recentQty,
+            CAST(priorQty AS DECIMAL(20,0)) AS priorQty,
+            CAST(recentQty - priorQty AS DECIMAL(20,0)) AS deltaQty
+        FROM w
+        WHERE priorQty >= %(min_qty)s
+        ORDER BY {order_sql}
+        LIMIT %(top)s
+    """
+    params: dict[str, Any] = {
+        "account": account,
+        "wd": window_days,
+        "wd2": window_days * 2,
+        "min_qty": min_qty,
+        "top": top,
+    }
+    if until:
+        params["until"] = until
+    with conn.cursor() as cur:
+        cur.execute(sql, params)
+        rows = cur.fetchall()
+    out = []
+    for r in rows:
+        row = serialize_row(r)
+        prior = float(row["priorQty"])
+        recent = float(row["recentQty"])
+        row["dropPct"] = round((recent - prior) / prior, 4) if prior > 0 else None
+        out.append(row)
+    return out
+
+
 def return_detail(conn, account: str, sku: str, since: str, limit: int) -> list[dict[str, Any]]:
     sql = """
         SELECT
@@ -407,6 +467,16 @@ def main() -> None:
                 since=req["since"],
                 top=int(req.get("top", 20)),
                 style=req.get("style"),
+            )
+        elif op == "siteSlowMovers":
+            rows = site_slow_movers(
+                conn,
+                account=req["account"],
+                until=req.get("until"),
+                window_days=int(req.get("windowDays", 30)),
+                top=int(req.get("top", 20)),
+                min_qty=int(req.get("minQty", 30)),
+                sort=req.get("sort", "decline"),
             )
         elif op == "returnDetail":
             rows = return_detail(
