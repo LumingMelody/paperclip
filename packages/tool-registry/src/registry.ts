@@ -31,6 +31,10 @@ import { adsetPerformanceDescriptor } from "./tools/meta/adsetPerformance.js";
 import { toolCallsSearchDescriptor } from "./tools/meta/toolCallsSearch.js";
 import { getProductDescriptor } from "./tools/shopify/getProduct.js";
 import { listProductsByCollectionDescriptor } from "./tools/shopify/listProductsByCollection.js";
+import { getProductByIdDescriptor } from "./tools/shopify/getProductById.js";
+import { searchProductsDescriptor } from "./tools/shopify/searchProducts.js";
+import { listCollectionsDescriptor } from "./tools/shopify/listCollections.js";
+import { listLocationsDescriptor } from "./tools/shopify/listLocations.js";
 import { getOrderDescriptor } from "./tools/spapi/getOrder.js";
 import { listOrdersUpdatedSinceDescriptor } from "./tools/spapi/listOrdersUpdatedSince.js";
 
@@ -71,6 +75,10 @@ export const tools: ToolDescriptor[] = [
   toolCallsSearchDescriptor,
   getProductDescriptor,
   listProductsByCollectionDescriptor,
+  getProductByIdDescriptor,
+  searchProductsDescriptor,
+  listCollectionsDescriptor,
+  listLocationsDescriptor,
   adAccountSummaryDescriptor,
   adsetPerformanceDescriptor,
   getOrderDescriptor,

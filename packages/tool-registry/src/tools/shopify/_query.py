@@ -89,6 +89,73 @@ def op_list_products_by_collection(req: dict[str, Any]) -> None:
     emit({"products": data.get("products", [])})
 
 
+def op_get_product_by_id(req: dict[str, Any]) -> None:
+    product_id = req.get("productId")
+    if not isinstance(product_id, str) or not product_id.isdigit():
+        emit({"error": "ValidationError", "message": "getProductById requires numeric productId"}, 1)
+    data = shopify_get(f"products/{product_id}.json")
+    product = data.get("product")
+    if not product:
+        emit({"error": "NotFound", "message": f"no product with id '{product_id}'"}, 1)
+    emit({"product": product})
+
+
+def op_search_products(req: dict[str, Any]) -> None:
+    limit = req.get("limit", 50)
+    if not isinstance(limit, int) or limit < 1 or limit > 250:
+        emit({"error": "ValidationError", "message": "limit must be 1..250"}, 1)
+    query: dict[str, Any] = {"limit": limit}
+    # REST products.json filters. NOTE: `title` is EXACT match (substring search needs GraphQL).
+    status = req.get("status")
+    if status is not None:
+        if status not in ("active", "archived", "draft"):
+            emit({"error": "ValidationError", "message": "status must be active/archived/draft"}, 1)
+        query["status"] = status
+    for key, param in (("vendor", "vendor"), ("productType", "product_type"),
+                       ("collectionId", "collection_id"), ("title", "title")):
+        val = req.get(key)
+        if val is not None:
+            if not isinstance(val, str) or not val:
+                emit({"error": "ValidationError", "message": f"{key} must be a non-empty string"}, 1)
+            query[param] = val
+    data = shopify_get("products.json", query)
+    emit({"products": data.get("products", [])})
+
+
+def op_list_collections(req: dict[str, Any]) -> None:
+    limit = req.get("limit", 50)
+    if not isinstance(limit, int) or limit < 1 or limit > 250:
+        emit({"error": "ValidationError", "message": "limit must be 1..250"}, 1)
+    title_contains = req.get("titleContains")
+    if title_contains is not None and not isinstance(title_contains, str):
+        emit({"error": "ValidationError", "message": "titleContains must be a string"}, 1)
+    needle = title_contains.lower() if isinstance(title_contains, str) and title_contains else None
+    # REST has no unified collections endpoint — merge custom + smart.
+    collections: list[dict[str, Any]] = []
+    for path, key, ctype in (("custom_collections.json", "custom_collections", "custom"),
+                             ("smart_collections.json", "smart_collections", "smart")):
+        data = shopify_get(path, {"limit": limit})
+        for col in data.get(key, []):
+            if not isinstance(col, dict):
+                continue
+            if needle and needle not in str(col.get("title", "")).lower():
+                continue
+            collections.append({
+                "id": col.get("id"),
+                "title": col.get("title"),
+                "handle": col.get("handle"),
+                "collectionType": ctype,
+                "productsCount": col.get("products_count"),
+                "updatedAt": col.get("updated_at"),
+            })
+    emit({"collections": collections})
+
+
+def op_list_locations(req: dict[str, Any]) -> None:
+    data = shopify_get("locations.json")
+    emit({"locations": data.get("locations", [])})
+
+
 def main() -> None:
     req = read_request()
     op = req.get("op")
@@ -96,6 +163,14 @@ def main() -> None:
         op_get_product(req)
     elif op == "listProductsByCollection":
         op_list_products_by_collection(req)
+    elif op == "getProductById":
+        op_get_product_by_id(req)
+    elif op == "searchProducts":
+        op_search_products(req)
+    elif op == "listCollections":
+        op_list_collections(req)
+    elif op == "listLocations":
+        op_list_locations(req)
     else:
         emit({"error": "ValidationError", "message": f"unknown op: {op}"}, 1)
 

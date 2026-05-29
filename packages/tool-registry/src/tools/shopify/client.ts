@@ -7,13 +7,19 @@ const helperPath = fileURLToPath(new URL("./_query.py", import.meta.url));
 
 export type ShopifyRequest =
   | { op: "getProduct"; handle: string }
-  | { op: "listProductsByCollection"; collectionId: string; limit?: number };
+  | { op: "listProductsByCollection"; collectionId: string; limit?: number }
+  | { op: "getProductById"; productId: string }
+  | { op: "searchProducts"; status?: string; vendor?: string; productType?: string; collectionId?: string; title?: string; limit?: number }
+  | { op: "listCollections"; limit?: number; titleContains?: string }
+  | { op: "listLocations" };
 
-// .strict() on both branches: see spapi/client.ts for why z.unknown() in the
+// .strict() on each branch: see spapi/client.ts for why z.unknown() in the
 // first member would otherwise swallow list-products responses.
 const shopifyHelperResponseSchema = z.union([
   z.object({ version: z.literal("1"), products: z.array(z.unknown()) }).strict(),
   z.object({ version: z.literal("1"), product: z.unknown() }).strict(),
+  z.object({ version: z.literal("1"), collections: z.array(z.unknown()) }).strict(),
+  z.object({ version: z.literal("1"), locations: z.array(z.unknown()) }).strict(),
 ]);
 
 export async function queryShopify(companyId: string, request: ShopifyRequest): Promise<unknown> {
