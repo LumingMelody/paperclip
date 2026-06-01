@@ -35,9 +35,10 @@ export const listCollectionsDescriptor: ToolDescriptor<ShopifyListCollectionsInp
   source: "shopify",
   description:
     "List Shopify collections (read-only) — merges custom + smart collections, each tagged with " +
-    "collectionType. Optional titleContains filter (case-insensitive substring). Use this to " +
-    "discover the collectionId needed by shopify.listProductsByCollection. Returns up to `limit` " +
-    "(default 50, max 250) PER collection type.",
+    "collectionType. Optional titleContains filter (case-insensitive substring); when set it " +
+    "deep-scans (cursor-paginated, up to ~5000 per type) so matches past page 1 are not dropped — " +
+    "a store can have 1000+ smart collections. Returns up to `limit` (default 50, max 250) matches " +
+    "PER collection type. Use this to discover the collectionId needed by shopify.listProductsByCollection.",
   readOnly: true,
   inputSchema,
   outputSchema,

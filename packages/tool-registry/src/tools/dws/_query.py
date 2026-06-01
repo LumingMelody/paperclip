@@ -87,13 +87,13 @@ def return_reasons(conn, account_id: int, since: str, sku: str | None, top: int)
             COUNT(*) AS returnCount,
             COUNT(DISTINCT sku) AS skuCount,
             COUNT(DISTINCT orderid) AS orderCount,
-            CAST(COALESCE(SUM(quantity), 0) AS DECIMAL(20,0)) AS unitsReturned
+            CAST(COALESCE(SUM(rf_quantity), 0) AS DECIMAL(20,0)) AS unitsReturned
         FROM (
             SELECT
                 returnReason AS return_reason,
                 seller_sku AS sku,
                 amazon_order_id AS orderid,
-                quantity
+                rf_quantity
             FROM dws_od_amazon_refund_rate_d
             WHERE accountId = %(account_id)s
               AND check_date >= %(since)s
@@ -121,7 +121,7 @@ def returns_by_sku(conn, account_id: int, since: str, top: int) -> list[dict[str
                 seller_sku AS sku,
                 returnReason AS return_reason,
                 amazon_order_id AS orderid,
-                quantity
+                rf_quantity
             FROM dws_od_amazon_refund_rate_d
             WHERE accountId = %(account_id)s
               AND check_date >= %(since)s
@@ -130,7 +130,7 @@ def returns_by_sku(conn, account_id: int, since: str, top: int) -> list[dict[str
             SELECT
                 sku,
                 COUNT(*) AS returnCount,
-                CAST(COALESCE(SUM(quantity), 0) AS DECIMAL(20,0)) AS unitsReturned,
+                CAST(COALESCE(SUM(rf_quantity), 0) AS DECIMAL(20,0)) AS unitsReturned,
                 COUNT(DISTINCT orderid) AS orderCount
             FROM src
             WHERE sku IS NOT NULL AND sku != ''
