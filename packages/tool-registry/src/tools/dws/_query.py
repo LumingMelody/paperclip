@@ -168,11 +168,14 @@ def return_rate_by_style(
     conn,
     account_id: int,
     since: str,
+    until: str | None,
     top: int,
     min_qty: int,
+    maturity_days: int,
     style: str | None = None,
-) -> list[dict[str, Any]]:
-    sql = """
+) -> dict[str, Any]:
+    effective_until = "%(until)s" if until else "DATE_SUB(CURDATE(), INTERVAL %(maturity_days)s DAY)"
+    sql = f"""
         SELECT
             sku_left7 AS styleCode,
             CAST(COALESCE(SUM(quantity),0) AS DECIMAL(20,0)) AS salesQty,
@@ -180,9 +183,18 @@ def return_rate_by_style(
             COUNT(DISTINCT seller_sku) AS skuCount
         FROM dws_od_amazon_refund_rate_d
         WHERE accountId=%(account_id)s AND check_date>=%(since)s
+              AND check_date < {effective_until}
               AND sku_left7 IS NOT NULL AND sku_left7!=''
     """
-    params: dict[str, Any] = {"account_id": account_id, "since": since, "top": top, "min_qty": min_qty}
+    params: dict[str, Any] = {
+        "account_id": account_id,
+        "since": since,
+        "top": top,
+        "min_qty": min_qty,
+        "maturity_days": maturity_days,
+    }
+    if until:
+        params["until"] = until
     if style is not None:
         sql += " AND sku_left7 = %(style)s"
         params["style"] = style
@@ -203,7 +215,23 @@ def return_rate_by_style(
         return_qty = float(row["returnQty"])
         row["returnRate"] = round(return_qty / sales_qty, 4) if sales_qty > 0 else None
         out.append(row)
-    return out
+    metadata_sql = f"""
+        SELECT
+            CURDATE() AS asOfDate,
+            %(since)s AS windowStart,
+            CAST({effective_until} AS DATE) AS windowEnd,
+            %(maturity_days)s AS maturityDays,
+            CASE
+                WHEN {effective_until} > DATE_SUB(CURDATE(), INTERVAL %(maturity_days)s DAY) THEN TRUE
+                ELSE FALSE
+            END AS windowIncludesImmature
+    """
+    with conn.cursor() as cur:
+        cur.execute(metadata_sql, params)
+        metadata = serialize_row(cur.fetchone())
+    metadata["maturityDays"] = int(metadata["maturityDays"])
+    metadata["windowIncludesImmature"] = bool(metadata["windowIncludesImmature"])
+    return {"rows": out, **metadata}
 
 
 def site_top_styles(conn, account: str, since: str, top: int, style: str | None = None) -> list[dict[str, Any]]:
@@ -452,14 +480,17 @@ def main() -> None:
             )
         elif op == "returnRateByStyle":
             account_id = resolve_account_id(conn, req["account"])
-            rows = return_rate_by_style(
+            result = return_rate_by_style(
                 conn,
                 account_id=account_id,
                 since=req["since"],
+                until=req.get("until"),
                 top=int(req.get("top", 20)),
                 min_qty=int(req.get("minQty", 50)),
+                maturity_days=int(req.get("maturityDays", 45)),
                 style=req.get("style"),
             )
+            emit(result)
         elif op == "siteTopStyles":
             rows = site_top_styles(
                 conn,

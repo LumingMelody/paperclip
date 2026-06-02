@@ -24,6 +24,14 @@ const ctx = {
   argsHash: "c".repeat(64),
 } as const;
 
+const metadata = {
+  asOfDate: "2026-06-02",
+  windowStart: "2026-01-01",
+  windowEnd: "2026-04-18",
+  maturityDays: 45,
+  windowIncludesImmature: false,
+};
+
 describe("dws.returnRateByStyle", () => {
   beforeEach(() => {
     mocks.loadCompanySecrets.mockReset();
@@ -42,10 +50,10 @@ describe("dws.returnRateByStyle", () => {
       { styleCode: "AB12345", salesQty: 1200, returnQty: 96, returnRate: 0.08, skuCount: 14 },
       { styleCode: "CD67890", salesQty: 800, returnQty: 40, returnRate: 0.05, skuCount: 9 },
     ];
-    mocks.runPythonHelper.mockResolvedValue({ version: "1", rows });
+    mocks.runPythonHelper.mockResolvedValue({ version: "1", rows, ...metadata });
     const input = returnRateByStyleDescriptor.inputSchema.parse({ shop: "EP-US", since: "2026-01-01" });
 
-    await expect(returnRateByStyleDescriptor.handler(ctx, input)).resolves.toEqual({ rows });
+    await expect(returnRateByStyleDescriptor.handler(ctx, input)).resolves.toEqual({ rows, ...metadata });
 
     expect(mocks.loadCompanySecrets).toHaveBeenCalledWith("company-1", "dws");
     expect(mocks.runPythonHelper).toHaveBeenCalledWith(
@@ -56,8 +64,10 @@ describe("dws.returnRateByStyle", () => {
           op: "returnRateByStyle",
           account: "AmazonEPUS",
           since: "2026-01-01",
+          until: undefined,
           top: 20,
           minQty: 50,
+          maturityDays: 45,
           style: undefined,
         },
         envFromSecrets: {
@@ -71,17 +81,26 @@ describe("dws.returnRateByStyle", () => {
     );
   });
 
-  it("forwards explicit top / minQty / style overrides to the helper", async () => {
-    mocks.runPythonHelper.mockResolvedValue({ version: "1", rows: [] });
+  it("forwards explicit until / maturityDays / top / minQty / style overrides to the helper", async () => {
+    const explicitMetadata = {
+      ...metadata,
+      windowStart: "2025-12-31",
+      windowEnd: "2026-05-01",
+      maturityDays: 30,
+      windowIncludesImmature: true,
+    };
+    mocks.runPythonHelper.mockResolvedValue({ version: "1", rows: [], ...explicitMetadata });
     const input = returnRateByStyleDescriptor.inputSchema.parse({
       shop: "PZ-UK",
       since: "2025-12-31",
+      until: "2026-05-01",
       top: 5,
       minQty: 100,
+      maturityDays: 30,
       style: "AB12345",
     });
 
-    await expect(returnRateByStyleDescriptor.handler(ctx, input)).resolves.toEqual({ rows: [] });
+    await expect(returnRateByStyleDescriptor.handler(ctx, input)).resolves.toEqual({ rows: [], ...explicitMetadata });
 
     expect(mocks.runPythonHelper).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -90,8 +109,10 @@ describe("dws.returnRateByStyle", () => {
           op: "returnRateByStyle",
           account: "AmazonPZUK",
           since: "2025-12-31",
+          until: "2026-05-01",
           top: 5,
           minQty: 100,
+          maturityDays: 30,
           style: "AB12345",
         },
       }),
@@ -107,6 +128,26 @@ describe("dws.returnRateByStyle", () => {
   it("rejects malformed since dates at input validation", () => {
     expect(() => returnRateByStyleDescriptor.inputSchema.parse({ shop: "EP-US", since: "2026/01/01" })).toThrow();
     expect(() => returnRateByStyleDescriptor.inputSchema.parse({ shop: "EP-US", since: "Jan 1 2026" })).toThrow();
+    expect(mocks.runPythonHelper).not.toHaveBeenCalled();
+  });
+
+  it("rejects malformed until dates at input validation", () => {
+    expect(() =>
+      returnRateByStyleDescriptor.inputSchema.parse({ shop: "EP-US", since: "2026-01-01", until: "2026/05/01" }),
+    ).toThrow();
+    expect(() =>
+      returnRateByStyleDescriptor.inputSchema.parse({ shop: "EP-US", since: "2026-01-01", until: "May 1 2026" }),
+    ).toThrow();
+    expect(mocks.runPythonHelper).not.toHaveBeenCalled();
+  });
+
+  it("rejects out-of-range maturityDays at input validation", () => {
+    expect(() =>
+      returnRateByStyleDescriptor.inputSchema.parse({ shop: "EP-US", since: "2026-01-01", maturityDays: -1 }),
+    ).toThrow();
+    expect(() =>
+      returnRateByStyleDescriptor.inputSchema.parse({ shop: "EP-US", since: "2026-01-01", maturityDays: 181 }),
+    ).toThrow();
     expect(mocks.runPythonHelper).not.toHaveBeenCalled();
   });
 

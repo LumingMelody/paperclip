@@ -4,13 +4,16 @@ import type { ToolDescriptor } from "../../registry.js";
 import { queryDws, shopToAccount } from "./client.js";
 
 const SHOP_RE = /^(EP|PZ|DAMA)-[A-Z]{2}$/;
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 const inputSchema = z
   .object({
     shop: z.string().regex(SHOP_RE, "shop must look like EP-US, EP-UK, PZ-US, DAMA-US, etc."),
-    since: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "since must be YYYY-MM-DD"),
+    since: z.string().regex(DATE_RE, "since must be YYYY-MM-DD"),
+    until: z.string().regex(DATE_RE, "until must be YYYY-MM-DD").optional(),
     top: z.coerce.number().int().min(1).max(50).optional(),
     minQty: z.coerce.number().int().min(1).optional(),
+    maturityDays: z.coerce.number().int().min(0).max(180).optional(),
     style: z.string().optional(),
   })
   .strict();
@@ -23,20 +26,35 @@ const rowSchema = z.object({
   skuCount: z.number(),
 });
 
-const outputSchema = z.object({ rows: z.array(rowSchema) });
+const outputSchema = z.object({
+  rows: z.array(rowSchema),
+  asOfDate: z.string(),
+  windowStart: z.string(),
+  windowEnd: z.string(),
+  maturityDays: z.number(),
+  windowIncludesImmature: z.boolean(),
+});
 
 export type DwsReturnRateByStyleInput = z.infer<typeof inputSchema>;
 export type DwsReturnRateByStyleOutput = z.infer<typeof outputSchema>;
 
+type ReturnRateByStyleRequest = Extract<Parameters<typeof queryDws>[1], { op: "returnRateByStyle" }> & {
+  until?: string;
+  maturityDays?: number;
+};
+
 async function handler(ctx: ExecutionContext, input: DwsReturnRateByStyleInput): Promise<DwsReturnRateByStyleOutput> {
-  const result = await queryDws(ctx.companyId, {
+  const request: ReturnRateByStyleRequest = {
     op: "returnRateByStyle",
     account: shopToAccount(input.shop),
     since: input.since,
+    until: input.until,
     top: input.top ?? 20,
     minQty: input.minQty ?? 50,
+    maturityDays: input.maturityDays ?? 45,
     style: input.style,
-  });
+  };
+  const result = await queryDws(ctx.companyId, request);
   return outputSchema.parse(result);
 }
 
@@ -45,11 +63,15 @@ export const returnRateByStyleDescriptor: ToolDescriptor<DwsReturnRateByStyleInp
   cliSubcommand: "return-rate-by-style",
   source: "dws",
   description:
-    "Amazon style-code (sku_left7) return rates for a shop since a given date. Omit style " +
-    "to answer highest-return-rate styles; pass an exact style code to answer one specific " +
-    "style's return rate. Rate = refunded units / ordered units. Source: single internal " +
-    "DW (Aliyun) table with 4yr history and broader store coverage than Lingxing. Distinct " +
-    "from Lingxing return rate, which is per shop_name/SKU.",
+    "Amazon style-code (sku_left7) return rates for a shop over a closed-open order window: " +
+    "check_date >= since and check_date < until. Pass until for retrospective fixed-window " +
+    "reports such as one calendar month. If until is omitted, the tool defaults to mature " +
+    "cohorts only by ending the window at CURDATE() - maturityDays, with maturityDays defaulting " +
+    "to 45 because recent orders are right-censored and usually understate returns. Omit style " +
+    "to rank highest-return-rate styles after applying minQty to real salesQty inside the window; " +
+    "pass an exact style code to query one style without minQty/ranking. Rate = refunded units / " +
+    "ordered units. Source: single internal DW (Aliyun) table with 4yr history and broader store " +
+    "coverage than Lingxing. Distinct from Lingxing return rate, which is per shop_name/SKU.",
   readOnly: true,
   inputSchema,
   outputSchema,
