@@ -11,7 +11,7 @@ const inputSchema = z
     shop: z.string().regex(SHOP_RE, "shop must look like EP-US, EP-UK, PZ-US, DAMA-US, etc."),
     since: z.string().regex(DATE_RE, "since must be YYYY-MM-DD"),
     until: z.string().regex(DATE_RE, "until must be YYYY-MM-DD").optional(),
-    top: z.coerce.number().int().min(1).max(50).optional(),
+    top: z.coerce.number().int().min(1).max(100).optional(),
     minQty: z.coerce.number().int().min(1).optional(),
     maturityDays: z.coerce.number().int().min(0).max(180).optional(),
     style: z.string().optional(),
