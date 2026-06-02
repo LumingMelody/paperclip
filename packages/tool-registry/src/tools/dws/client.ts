@@ -14,12 +14,16 @@ export type DwsQueryRequest =
   | { op: "returnTrend"; account: string; since: string; until: string; granularity?: "day" | "week" | "month" }
   | { op: "skusByReason"; account: string; since: string; reasons: string[]; top?: number };
 
-const dwsHelperResponseSchema = z
+export const dwsHelperResponseSchema = z
   .object({
     version: z.literal("1"),
     rows: z.array(z.unknown()),
   })
-  .strict();
+  // passthrough (not strict): tools may attach top-level metadata alongside
+  // rows (e.g. returnRateByStyle returns asOfDate / windowStart / windowEnd /
+  // maturityDays / windowIncludesImmature). A strict envelope rejected those
+  // as "Unrecognized key(s)" and surfaced as UpstreamError to the bot.
+  .passthrough();
 
 const SHOP_RE = /^(EP|PZ|DAMA)-([A-Z]{2})$/;
 
