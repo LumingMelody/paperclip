@@ -234,6 +234,286 @@ def return_rate_by_style(
     return {"rows": out, **metadata}
 
 
+def cohort_metadata(conn, since: str, until: str | None, maturity_days: int) -> tuple[str, dict[str, Any]]:
+    effective_until = "%(until)s" if until else "DATE_SUB(CURDATE(), INTERVAL %(maturity_days)s DAY)"
+    params: dict[str, Any] = {"since": since, "maturity_days": maturity_days}
+    if until:
+        params["until"] = until
+    metadata_sql = f"""
+        SELECT
+            CURDATE() AS asOfDate,
+            %(since)s AS windowStart,
+            CAST({effective_until} AS DATE) AS windowEnd,
+            %(maturity_days)s AS maturityDays,
+            CASE
+                WHEN {effective_until} > DATE_SUB(CURDATE(), INTERVAL %(maturity_days)s DAY) THEN TRUE
+                ELSE FALSE
+            END AS windowIncludesImmature
+    """
+    with conn.cursor() as cur:
+        cur.execute(metadata_sql, params)
+        metadata = serialize_row(cur.fetchone())
+    metadata["maturityDays"] = int(metadata["maturityDays"])
+    metadata["windowIncludesImmature"] = bool(metadata["windowIncludesImmature"])
+    return effective_until, metadata
+
+
+def site_return_rate_by_style(
+    conn,
+    account: str,
+    since: str,
+    until: str | None,
+    top: int,
+    min_qty: int,
+    maturity_days: int,
+    style: str | None = None,
+) -> dict[str, Any]:
+    effective_until, metadata = cohort_metadata(conn, since, until, maturity_days)
+    sql = f"""
+        SELECT
+            LEFT(shipping_sku, 7) AS styleCode,
+            CAST(COALESCE(SUM(quantity), 0) AS DECIMAL(20,0)) AS salesQty,
+            CAST(COALESCE(SUM(COALESCE(return_quantity, 0)), 0) AS DECIMAL(20,0)) AS returnQty,
+            COUNT(DISTINCT shipping_sku) AS skuCount
+        FROM dm_od_shopify_resreturn_d
+        WHERE account = %(account)s
+          AND pay_time >= %(since)s
+          AND pay_time < {effective_until}
+          AND shipping_sku IS NOT NULL
+          AND shipping_sku != ''
+    """
+    params: dict[str, Any] = {
+        "account": account,
+        "since": since,
+        "top": top,
+        "min_qty": min_qty,
+        "maturity_days": maturity_days,
+    }
+    if until:
+        params["until"] = until
+    if style is not None:
+        sql += " AND LEFT(shipping_sku, 7) = %(style)s"
+        params["style"] = style
+    sql += " GROUP BY LEFT(shipping_sku, 7)"
+    if style is None:
+        sql += """
+            HAVING salesQty >= %(min_qty)s
+            ORDER BY (SUM(COALESCE(return_quantity, 0)) / NULLIF(SUM(quantity), 0)) DESC
+            LIMIT %(top)s
+        """
+    with conn.cursor() as cur:
+        cur.execute(sql, params)
+        rows = cur.fetchall()
+    out = []
+    for r in rows:
+        row = serialize_row(r)
+        sales_qty = float(row["salesQty"])
+        return_qty = float(row["returnQty"])
+        row["returnRate"] = round(return_qty / sales_qty, 4) if sales_qty > 0 else None
+        out.append(row)
+    return {"rows": out, **metadata}
+
+
+def site_return_timing_by_style(
+    conn,
+    account: str,
+    since: str,
+    until: str | None,
+    top: int,
+    maturity_days: int,
+    style: str | None = None,
+) -> dict[str, Any]:
+    effective_until, metadata = cohort_metadata(conn, since, until, maturity_days)
+    sql = f"""
+        SELECT
+            LEFT(shipping_sku, 7) AS styleCode,
+            CAST(COALESCE(SUM(COALESCE(return_quantity, 0)), 0) AS DECIMAL(20,0)) AS returnedQty,
+            CAST(COALESCE(SUM(CASE
+                WHEN DATEDIFF(return_time, pay_time) <= 30 THEN COALESCE(return_quantity, 0)
+                ELSE 0
+            END), 0) AS DECIMAL(20,0)) AS qty_0_30,
+            CAST(COALESCE(SUM(CASE
+                WHEN DATEDIFF(return_time, pay_time) BETWEEN 31 AND 45 THEN COALESCE(return_quantity, 0)
+                ELSE 0
+            END), 0) AS DECIMAL(20,0)) AS qty_31_45,
+            CAST(COALESCE(SUM(CASE
+                WHEN DATEDIFF(return_time, pay_time) > 45 THEN COALESCE(return_quantity, 0)
+                ELSE 0
+            END), 0) AS DECIMAL(20,0)) AS qty_45plus
+        FROM dm_od_shopify_resreturn_d
+        WHERE account = %(account)s
+          AND pay_time >= %(since)s
+          AND pay_time < {effective_until}
+          AND return_quantity > 0
+          AND return_time IS NOT NULL
+          AND pay_time IS NOT NULL
+          AND shipping_sku IS NOT NULL
+          AND shipping_sku != ''
+    """
+    params: dict[str, Any] = {
+        "account": account,
+        "since": since,
+        "top": top,
+        "maturity_days": maturity_days,
+    }
+    if until:
+        params["until"] = until
+    if style is not None:
+        sql += " AND LEFT(shipping_sku, 7) = %(style)s"
+        params["style"] = style
+    sql += " GROUP BY LEFT(shipping_sku, 7) ORDER BY returnedQty DESC LIMIT %(top)s"
+    with conn.cursor() as cur:
+        cur.execute(sql, params)
+        rows = cur.fetchall()
+    out = []
+    for r in rows:
+        row = serialize_row(r)
+        returned_qty = float(row["returnedQty"])
+        for key in ("qty_0_30", "qty_31_45", "qty_45plus"):
+            row[key] = float(row[key])
+        row["pct_0_30"] = round(row["qty_0_30"] / returned_qty, 4) if returned_qty > 0 else None
+        row["pct_31_45"] = round(row["qty_31_45"] / returned_qty, 4) if returned_qty > 0 else None
+        row["pct_45plus"] = round(row["qty_45plus"] / returned_qty, 4) if returned_qty > 0 else None
+        out.append(row)
+    return {"rows": out, **metadata}
+
+
+def site_return_rate_by_order_units(
+    conn,
+    account: str,
+    since: str,
+    until: str | None,
+    maturity_days: int,
+) -> dict[str, Any]:
+    effective_until, metadata = cohort_metadata(conn, since, until, maturity_days)
+    sql = f"""
+        WITH order_totals AS (
+            SELECT
+                orderid,
+                CAST(COALESCE(SUM(quantity), 0) AS DECIMAL(20,0)) AS orderSalesQty,
+                CAST(COALESCE(SUM(COALESCE(return_quantity, 0)), 0) AS DECIMAL(20,0)) AS orderReturnQty
+            FROM dm_od_shopify_resreturn_d
+            WHERE account = %(account)s
+              AND pay_time >= %(since)s
+              AND pay_time < {effective_until}
+              AND orderid IS NOT NULL
+              AND orderid != ''
+            GROUP BY orderid
+        ),
+        bucketed AS (
+            SELECT
+                CASE
+                    WHEN orderSalesQty >= 5 THEN '5+'
+                    ELSE CAST(orderSalesQty AS CHAR)
+                END AS unitsBucket,
+                orderSalesQty,
+                orderReturnQty
+            FROM order_totals
+            WHERE orderSalesQty BETWEEN 1 AND 4 OR orderSalesQty >= 5
+        )
+        SELECT
+            unitsBucket,
+            COUNT(*) AS orderCount,
+            CAST(COALESCE(SUM(orderSalesQty), 0) AS DECIMAL(20,0)) AS salesQty,
+            CAST(COALESCE(SUM(orderReturnQty), 0) AS DECIMAL(20,0)) AS returnQty
+        FROM bucketed
+        GROUP BY unitsBucket
+        ORDER BY FIELD(unitsBucket, '1', '2', '3', '4', '5+')
+    """
+    params: dict[str, Any] = {"account": account, "since": since, "maturity_days": maturity_days}
+    if until:
+        params["until"] = until
+    with conn.cursor() as cur:
+        cur.execute(sql, params)
+        rows = cur.fetchall()
+    out = []
+    for r in rows:
+        row = serialize_row(r)
+        sales_qty = float(row["salesQty"])
+        return_qty = float(row["returnQty"])
+        row["returnRate"] = round(return_qty / sales_qty, 4) if sales_qty > 0 else None
+        out.append(row)
+    return {"rows": out, **metadata}
+
+
+def site_return_rate_by_warehouse(
+    conn,
+    account: str,
+    since: str,
+    until: str | None,
+    maturity_days: int,
+) -> dict[str, Any]:
+    effective_until, metadata = cohort_metadata(conn, since, until, maturity_days)
+    sql = f"""
+        WITH src AS (
+            SELECT
+                CASE
+                    WHEN warehouseName IS NULL OR TRIM(warehouseName) = '' OR warehouseName = '无仓库记录'
+                    THEN '无仓库记录'
+                    ELSE warehouseName
+                END AS warehouseName,
+                quantity,
+                COALESCE(return_quantity, 0) AS return_quantity,
+                CASE
+                    WHEN warehouseName IS NULL OR TRIM(warehouseName) = '' OR warehouseName = '无仓库记录'
+                    THEN 1
+                    ELSE 0
+                END AS isDirtyWarehouse
+            FROM dm_od_shopify_resreturn_d
+            WHERE account = %(account)s
+              AND pay_time >= %(since)s
+              AND pay_time < {effective_until}
+        ),
+        totals AS (
+            SELECT
+                CAST(COALESCE(SUM(return_quantity), 0) AS DECIMAL(20,0)) AS totalReturnQty,
+                COUNT(*) AS totalRows,
+                COALESCE(SUM(isDirtyWarehouse), 0) AS dirtyRows
+            FROM src
+        ),
+        grouped AS (
+            SELECT
+                warehouseName,
+                CAST(COALESCE(SUM(quantity), 0) AS DECIMAL(20,0)) AS salesQty,
+                CAST(COALESCE(SUM(return_quantity), 0) AS DECIMAL(20,0)) AS returnQty
+            FROM src
+            GROUP BY warehouseName
+        )
+        SELECT
+            g.warehouseName,
+            g.salesQty,
+            g.returnQty,
+            CASE
+                WHEN t.totalReturnQty > 0 THEN g.returnQty / t.totalReturnQty
+                ELSE 0
+            END AS returnShare,
+            CASE
+                WHEN t.totalRows > 0 THEN t.dirtyRows / t.totalRows
+                ELSE 0
+            END AS dirtyWarehousePct
+        FROM grouped g
+        CROSS JOIN totals t
+        ORDER BY g.returnQty DESC, g.salesQty DESC
+    """
+    params: dict[str, Any] = {"account": account, "since": since, "maturity_days": maturity_days}
+    if until:
+        params["until"] = until
+    with conn.cursor() as cur:
+        cur.execute(sql, params)
+        rows = cur.fetchall()
+    out = []
+    dirty_warehouse_pct = 0.0
+    for r in rows:
+        row = serialize_row(r)
+        sales_qty = float(row["salesQty"])
+        return_qty = float(row["returnQty"])
+        dirty_warehouse_pct = round(float(row.pop("dirtyWarehousePct") or 0), 4)
+        row["returnRate"] = round(return_qty / sales_qty, 4) if sales_qty > 0 else None
+        row["returnShare"] = round(float(row["returnShare"] or 0), 4)
+        out.append(row)
+    return {"rows": out, "dirtyWarehousePct": dirty_warehouse_pct, **metadata}
+
+
 def site_top_styles(conn, account: str, since: str, top: int, style: str | None = None) -> list[dict[str, Any]]:
     sql = """
         SELECT
@@ -499,6 +779,47 @@ def main() -> None:
                 top=int(req.get("top", 20)),
                 style=req.get("style"),
             )
+        elif op == "siteReturnRateByStyle":
+            result = site_return_rate_by_style(
+                conn,
+                account=req["account"],
+                since=req["since"],
+                until=req.get("until"),
+                top=int(req.get("top", 20)),
+                min_qty=int(req.get("minQty", 50)),
+                maturity_days=int(req.get("maturityDays", 45)),
+                style=req.get("style"),
+            )
+            emit(result)
+        elif op == "siteReturnTimingByStyle":
+            result = site_return_timing_by_style(
+                conn,
+                account=req["account"],
+                since=req["since"],
+                until=req.get("until"),
+                top=int(req.get("top", 20)),
+                maturity_days=int(req.get("maturityDays", 45)),
+                style=req.get("style"),
+            )
+            emit(result)
+        elif op == "siteReturnRateByOrderUnits":
+            result = site_return_rate_by_order_units(
+                conn,
+                account=req["account"],
+                since=req["since"],
+                until=req.get("until"),
+                maturity_days=int(req.get("maturityDays", 45)),
+            )
+            emit(result)
+        elif op == "siteReturnRateByWarehouse":
+            result = site_return_rate_by_warehouse(
+                conn,
+                account=req["account"],
+                since=req["since"],
+                until=req.get("until"),
+                maturity_days=int(req.get("maturityDays", 45)),
+            )
+            emit(result)
         elif op == "siteSlowMovers":
             rows = site_slow_movers(
                 conn,
