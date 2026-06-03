@@ -94,8 +94,20 @@ try:
 except FileNotFoundError:
     pass
 
+# Post-migration (2026-05-27 single-bot -> multi-channel) single source of truth.
+# ~/.paperclip/dingtalk-channels.json is a FLAT dict keyed by channel name (NOT
+# nested under "channels"); it is maintained by the live bot + server broadcaster.
+# The old single-bot plist was archived and paperclip-dingtalk-bot/.env removed,
+# so the three legacy sources below now resolve to empty — this is the only
+# working cred source for the launchd-driven weekly report. Use the CONCIERGE
+# channel: the pusher sets robotCode=app_key and concierge is the robot
+# registered for the target group (dingtalk_conversations.json).
+channels = load_json(home / ".paperclip" / "dingtalk-channels.json")
+concierge = channels.get("concierge", {}) if isinstance(channels, dict) else {}
+
 app_key = (
     os.environ.get("DINGTALK_APP_KEY")
+    or concierge.get("app_key")
     or plist_env.get("DINGTALK_APP_KEY")
     or bot_dotenv.get("DINGTALK_APP_KEY")
     or find_normalized(secrets, {"dingtalk_app_key"})
@@ -103,6 +115,7 @@ app_key = (
 )
 app_secret = (
     os.environ.get("DINGTALK_APP_SECRET")
+    or concierge.get("app_secret")
     or plist_env.get("DINGTALK_APP_SECRET")
     or bot_dotenv.get("DINGTALK_APP_SECRET")
     or find_normalized(secrets, {"dingtalk_app_secret"})
