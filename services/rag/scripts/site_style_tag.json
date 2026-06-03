@@ -1,0 +1,1403 @@
+{
+  "_meta": {
+    "labels": [
+      "pre-order",
+      "新款",
+      "迭代前",
+      "迭代后"
+    ],
+    "note": "style(7-char) → 款式类型. 迭代款 normalized to 迭代后. Styles not present here are treated as 老款(未分类) by consumers. Refresh by re-exporting the 产品分类 sheet.",
+    "source": "独立站退款率预测表.xlsx → 产品分类 sheet (business-maintained)",
+    "styleCount": 347
+  },
+  "styles": {
+    "EE00466": {
+      "primaryCategory": "EE",
+      "styleType": "迭代后"
+    },
+    "EE00693": {
+      "primaryCategory": null,
+      "styleType": "迭代前"
+    },
+    "EE00694": {
+      "primaryCategory": "EE",
+      "styleType": "迭代后"
+    },
+    "EE00733": {
+      "primaryCategory": "EE",
+      "styleType": "迭代后"
+    },
+    "EE00736": {
+      "primaryCategory": null,
+      "styleType": "迭代前"
+    },
+    "EE00756": {
+      "primaryCategory": "EE",
+      "styleType": "迭代后"
+    },
+    "EE00908": {
+      "primaryCategory": "EE",
+      "styleType": "迭代后"
+    },
+    "EE01487": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "EE01489": {
+      "primaryCategory": null,
+      "styleType": "迭代前"
+    },
+    "EE01646": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "EE0164A": {
+      "primaryCategory": null,
+      "styleType": "迭代前"
+    },
+    "EE01689": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "EE0168B": {
+      "primaryCategory": null,
+      "styleType": "迭代前"
+    },
+    "EE01738": {
+      "primaryCategory": null,
+      "styleType": "迭代前"
+    },
+    "EE01739": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "EE01888": {
+      "primaryCategory": null,
+      "styleType": "迭代前"
+    },
+    "EE01892": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "EE01960": {
+      "primaryCategory": null,
+      "styleType": "迭代前"
+    },
+    "EE01961": {
+      "primaryCategory": null,
+      "styleType": "迭代前"
+    },
+    "EE01962": {
+      "primaryCategory": "EE",
+      "styleType": "迭代后"
+    },
+    "EE01963": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "EE01977": {
+      "primaryCategory": null,
+      "styleType": "迭代前"
+    },
+    "EE01979": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "EE01990": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "EE01999": {
+      "primaryCategory": null,
+      "styleType": "迭代前"
+    },
+    "EE02027": {
+      "primaryCategory": null,
+      "styleType": "迭代前"
+    },
+    "EE02028": {
+      "primaryCategory": "EE",
+      "styleType": "迭代后"
+    },
+    "EE02073": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "EE02083": {
+      "primaryCategory": null,
+      "styleType": "迭代前"
+    },
+    "EE02130": {
+      "primaryCategory": null,
+      "styleType": "迭代前"
+    },
+    "EE02138": {
+      "primaryCategory": "EE",
+      "styleType": "迭代后"
+    },
+    "EE02370": {
+      "primaryCategory": null,
+      "styleType": "迭代前"
+    },
+    "EE02372": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "EE02386": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "EE02387": {
+      "primaryCategory": null,
+      "styleType": "迭代前"
+    },
+    "EE02463": {
+      "primaryCategory": null,
+      "styleType": "迭代前"
+    },
+    "EE02559": {
+      "primaryCategory": "EE",
+      "styleType": "新款"
+    },
+    "EE02580": {
+      "primaryCategory": null,
+      "styleType": "迭代前"
+    },
+    "EE02590": {
+      "primaryCategory": "EE",
+      "styleType": "迭代后"
+    },
+    "EE02644": {
+      "primaryCategory": "EE",
+      "styleType": "新款"
+    },
+    "EE02656": {
+      "primaryCategory": "EE",
+      "styleType": "新款"
+    },
+    "EE02657": {
+      "primaryCategory": "EE",
+      "styleType": "新款"
+    },
+    "EE02664": {
+      "primaryCategory": "EE",
+      "styleType": "新款"
+    },
+    "EE02665": {
+      "primaryCategory": "EE",
+      "styleType": "新款"
+    },
+    "EE02669": {
+      "primaryCategory": "EE",
+      "styleType": "新款"
+    },
+    "EE02671": {
+      "primaryCategory": "EE",
+      "styleType": "新款"
+    },
+    "EE02673": {
+      "primaryCategory": "EE",
+      "styleType": "新款"
+    },
+    "EE02675": {
+      "primaryCategory": "EE",
+      "styleType": "新款"
+    },
+    "EE02677": {
+      "primaryCategory": "EE",
+      "styleType": "新款"
+    },
+    "EE02679": {
+      "primaryCategory": "EE",
+      "styleType": "新款"
+    },
+    "EE02686": {
+      "primaryCategory": "EE",
+      "styleType": "新款"
+    },
+    "EE02691": {
+      "primaryCategory": "EE",
+      "styleType": "新款"
+    },
+    "EE02805": {
+      "primaryCategory": "EE",
+      "styleType": "新款"
+    },
+    "EE02823": {
+      "primaryCategory": "EE",
+      "styleType": "新款"
+    },
+    "EE02960": {
+      "primaryCategory": null,
+      "styleType": "迭代前"
+    },
+    "EE02968": {
+      "primaryCategory": "EE",
+      "styleType": "迭代后"
+    },
+    "EE07414": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "EE07888": {
+      "primaryCategory": "EE",
+      "styleType": "迭代后"
+    },
+    "EE09894": {
+      "primaryCategory": null,
+      "styleType": "迭代前"
+    },
+    "EE09897": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "EE11961": {
+      "primaryCategory": null,
+      "styleType": "迭代前"
+    },
+    "EE11964": {
+      "primaryCategory": "EE",
+      "styleType": "迭代后"
+    },
+    "EE41961": {
+      "primaryCategory": null,
+      "styleType": "迭代前"
+    },
+    "EE41966": {
+      "primaryCategory": "EE",
+      "styleType": "迭代后"
+    },
+    "EE41981": {
+      "primaryCategory": null,
+      "styleType": "迭代前"
+    },
+    "EE41988": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "EG01755": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "EG01756": {
+      "primaryCategory": null,
+      "styleType": "迭代前"
+    },
+    "EG01922": {
+      "primaryCategory": "EG",
+      "styleType": "迭代后"
+    },
+    "EG01923": {
+      "primaryCategory": null,
+      "styleType": "迭代前"
+    },
+    "EG01924": {
+      "primaryCategory": "EG",
+      "styleType": "迭代后"
+    },
+    "EG01926": {
+      "primaryCategory": null,
+      "styleType": "迭代前"
+    },
+    "EG02053": {
+      "primaryCategory": null,
+      "styleType": "迭代前"
+    },
+    "EG02055": {
+      "primaryCategory": "EG",
+      "styleType": "迭代后"
+    },
+    "EG02058": {
+      "primaryCategory": "EG",
+      "styleType": "迭代后"
+    },
+    "EG02084": {
+      "primaryCategory": null,
+      "styleType": "迭代前"
+    },
+    "EG02088": {
+      "primaryCategory": "EG",
+      "styleType": "迭代后"
+    },
+    "EG02093": {
+      "primaryCategory": null,
+      "styleType": "迭代前"
+    },
+    "EG02096": {
+      "primaryCategory": "EG",
+      "styleType": "迭代后"
+    },
+    "EG02220": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "EG02230": {
+      "primaryCategory": null,
+      "styleType": "迭代前"
+    },
+    "EG02468": {
+      "primaryCategory": "EG",
+      "styleType": "新款"
+    },
+    "EG02631": {
+      "primaryCategory": "EG",
+      "styleType": "新款"
+    },
+    "EG02632": {
+      "primaryCategory": "EG",
+      "styleType": "新款"
+    },
+    "EG02633": {
+      "primaryCategory": "EG",
+      "styleType": "新款"
+    },
+    "EG02634": {
+      "primaryCategory": "EG",
+      "styleType": "新款"
+    },
+    "EG02638": {
+      "primaryCategory": "EG",
+      "styleType": "新款"
+    },
+    "EG02643": {
+      "primaryCategory": "EG",
+      "styleType": "新款"
+    },
+    "EG02648": {
+      "primaryCategory": "EG",
+      "styleType": "新款"
+    },
+    "EG02649": {
+      "primaryCategory": "EG",
+      "styleType": "新款"
+    },
+    "EG02681": {
+      "primaryCategory": "EG",
+      "styleType": "新款"
+    },
+    "EG02682": {
+      "primaryCategory": "EG",
+      "styleType": "新款"
+    },
+    "EG02683": {
+      "primaryCategory": "EG",
+      "styleType": "新款"
+    },
+    "EG02684": {
+      "primaryCategory": "EG",
+      "styleType": "新款"
+    },
+    "EG02688": {
+      "primaryCategory": "EG",
+      "styleType": "新款"
+    },
+    "EG02692": {
+      "primaryCategory": "EG",
+      "styleType": "新款"
+    },
+    "EG02698": {
+      "primaryCategory": "EG",
+      "styleType": "新款"
+    },
+    "EG02699": {
+      "primaryCategory": "EG",
+      "styleType": "新款"
+    },
+    "EG02733": {
+      "primaryCategory": "EG",
+      "styleType": "新款"
+    },
+    "EG02744": {
+      "primaryCategory": "EG",
+      "styleType": "新款"
+    },
+    "EG02749": {
+      "primaryCategory": "EG",
+      "styleType": "新款"
+    },
+    "EG02762": {
+      "primaryCategory": "EG",
+      "styleType": "新款"
+    },
+    "EG02766": {
+      "primaryCategory": "EG",
+      "styleType": "新款"
+    },
+    "EG02769": {
+      "primaryCategory": "EG",
+      "styleType": "新款"
+    },
+    "EG31922": {
+      "primaryCategory": "EG",
+      "styleType": "迭代后"
+    },
+    "EG31926": {
+      "primaryCategory": null,
+      "styleType": "迭代前"
+    },
+    "EH02700": {
+      "primaryCategory": "EH",
+      "styleType": "新款"
+    },
+    "EH02729": {
+      "primaryCategory": "EH",
+      "styleType": "新款"
+    },
+    "EM02658": {
+      "primaryCategory": "EM",
+      "styleType": "新款"
+    },
+    "EM02689": {
+      "primaryCategory": "EM",
+      "styleType": "新款"
+    },
+    "EP00461": {
+      "primaryCategory": null,
+      "styleType": "迭代前"
+    },
+    "EP00751": {
+      "primaryCategory": null,
+      "styleType": "迭代前"
+    },
+    "EP00904": {
+      "primaryCategory": null,
+      "styleType": "迭代前"
+    },
+    "EP07412": {
+      "primaryCategory": null,
+      "styleType": "迭代前"
+    },
+    "EP07886": {
+      "primaryCategory": null,
+      "styleType": "迭代前"
+    },
+    "EP09890": {
+      "primaryCategory": null,
+      "styleType": "迭代前"
+    },
+    "ES00052": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ES01068": {
+      "primaryCategory": "ES",
+      "styleType": "迭代后"
+    },
+    "ES0106B": {
+      "primaryCategory": null,
+      "styleType": "迭代前"
+    },
+    "ES01818": {
+      "primaryCategory": "ES",
+      "styleType": "迭代后"
+    },
+    "ES01819": {
+      "primaryCategory": null,
+      "styleType": "迭代前"
+    },
+    "ES01840": {
+      "primaryCategory": null,
+      "styleType": "迭代前"
+    },
+    "ES01846": {
+      "primaryCategory": "ES",
+      "styleType": "迭代后"
+    },
+    "ES01886": {
+      "primaryCategory": null,
+      "styleType": "迭代前"
+    },
+    "ES01889": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ES02326": {
+      "primaryCategory": null,
+      "styleType": "迭代前"
+    },
+    "ES02522": {
+      "primaryCategory": null,
+      "styleType": "迭代前"
+    },
+    "ES02660": {
+      "primaryCategory": "ES",
+      "styleType": "新款"
+    },
+    "ES02663": {
+      "primaryCategory": "ES",
+      "styleType": "新款"
+    },
+    "ES02670": {
+      "primaryCategory": "ES",
+      "styleType": "新款"
+    },
+    "ES02695": {
+      "primaryCategory": "ES",
+      "styleType": "新款"
+    },
+    "ES02702": {
+      "primaryCategory": "ES",
+      "styleType": "新款"
+    },
+    "ES02703": {
+      "primaryCategory": "ES",
+      "styleType": "新款"
+    },
+    "ES02704": {
+      "primaryCategory": "ES",
+      "styleType": "新款"
+    },
+    "ES02705": {
+      "primaryCategory": "ES",
+      "styleType": "新款"
+    },
+    "ES02706": {
+      "primaryCategory": "ES",
+      "styleType": "新款"
+    },
+    "ES02707": {
+      "primaryCategory": "ES",
+      "styleType": "新款"
+    },
+    "ES02708": {
+      "primaryCategory": "ES",
+      "styleType": "新款"
+    },
+    "ES02709": {
+      "primaryCategory": "ES",
+      "styleType": "新款"
+    },
+    "ES02712": {
+      "primaryCategory": "ES",
+      "styleType": "新款"
+    },
+    "ES02720": {
+      "primaryCategory": "ES",
+      "styleType": "新款"
+    },
+    "ES02725": {
+      "primaryCategory": "ES",
+      "styleType": "新款"
+    },
+    "ES02727": {
+      "primaryCategory": "ES",
+      "styleType": "新款"
+    },
+    "ES02728": {
+      "primaryCategory": "ES",
+      "styleType": "新款"
+    },
+    "ES02758": {
+      "primaryCategory": "ES",
+      "styleType": "新款"
+    },
+    "ES02782": {
+      "primaryCategory": "ES",
+      "styleType": "新款"
+    },
+    "ES03326": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ES09018": {
+      "primaryCategory": null,
+      "styleType": "迭代前"
+    },
+    "ES09019": {
+      "primaryCategory": "ES",
+      "styleType": "迭代后"
+    },
+    "ES09899": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ES80116": {
+      "primaryCategory": null,
+      "styleType": "迭代前"
+    },
+    "ES80118": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ESS0050": {
+      "primaryCategory": null,
+      "styleType": "迭代前"
+    },
+    "ME00461": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME00906": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME01385": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME0164A": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME0165A": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME01888": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME01889": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME01952": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME01960": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME02041": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME02083": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME02235": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME02325": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME02387": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME02388": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME02391": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME02400": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME02404": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME02407": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME02409": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME02460": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME02463": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME02464": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME02466": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME02470": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME02471": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME02473": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME02477": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME02494": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME02495": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME02509": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME02511": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME02513": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME02514": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME02519": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME02520": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME02525": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME02526": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME02527": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME02531": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME02533": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME02535": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME02538": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME02544": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME02545": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME02547": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME02548": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME02549": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME02554": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME02558": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME02563": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME02564": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME02570": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME02581": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME02585": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME02588": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME02596": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME02597": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME02599": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME02600": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME02603": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME02605": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME02606": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME02607": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME02608": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME02609": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME02657": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME03489": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME03846": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME06319": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME07506": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME07709": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME09894": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME11963": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "ME41981": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MG00962": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MG01756": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MG01922": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MG01923": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MG01926": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MG01929": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MG02053": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MG02084": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MG02088": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MG02093": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MG02103": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MG02230": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MG02318": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MG02335": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MG02415": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MG02429": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MG02434": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MG02442": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MG02449": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MG02452": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MG02454": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MG02455": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MG02461": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MG02468": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MG02472": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MG02474": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MG02475": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MG02478": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MG02488": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MG02503": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MG02504": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MG02505": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MG02506": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MG02508": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MG02517": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MG02523": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MG02579": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MG05569": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MG06829": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MG08439": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MG31926": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MG41926": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MG61926": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MM02408": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS00237": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS00437": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS0106B": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS0128B": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS01749": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS01819": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS01840": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS01886": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS02043": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS02080": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS02264": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS02317": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS02319": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS02320": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS02354": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS02355": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS02360": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS02361": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS02367": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS02373": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS02390": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS02396": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS02399": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS02410": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS02417": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS02418": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS02419": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS02420": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS02421": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS02422": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS02423": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS02424": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS02425": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS02426": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS02427": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS02428": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS02432": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS02436": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS02438": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS02439": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS02440": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS02441": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS02447": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS02448": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS02462": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS02480": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS02482": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS02490": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS02491": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS02496": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS02497": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS02502": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS02507": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS02515": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS02516": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS02518": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS02522": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS02532": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS02541": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS02542": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS02551": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS02555": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS02556": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS02565": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS02566": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS02685": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS02711": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS03143": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS03989": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS09018": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS09769": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS80026": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MS80116": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MSS0017": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    },
+    "MY20809": {
+      "primaryCategory": null,
+      "styleType": "pre-order"
+    }
+  }
+}
