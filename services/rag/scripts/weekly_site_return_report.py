@@ -310,6 +310,7 @@ def cohort_metadata(
             CURDATE() AS asOfDate,
             %(since)s AS windowStart,
             CAST({effective_until} AS DATE) AS windowEnd,
+            CAST(DATE_SUB(CAST({effective_until} AS DATE), INTERVAL 1 DAY) AS DATE) AS coveredThrough,
             %(maturity_days)s AS maturityDays,
             CASE
                 WHEN {effective_until} > DATE_SUB(CURDATE(), INTERVAL %(maturity_days)s DAY) THEN TRUE
@@ -814,6 +815,21 @@ def render_table(headers: list[str], rows: list[list[Any]]) -> str:
     return "\n".join(lines)
 
 
+def covered_through_from_window_end(window_end: Any) -> str:
+    if not window_end:
+        return "-"
+    try:
+        return (_parse_iso_date(str(window_end)) - timedelta(days=1)).isoformat()
+    except argparse.ArgumentTypeError:
+        return str(window_end)
+
+
+def inclusive_window_label(metadata: dict[str, Any], fallback_since: str | None = None) -> str:
+    window_start = metadata.get("windowStart") or fallback_since or "-"
+    covered_through = metadata.get("coveredThrough") or covered_through_from_window_end(metadata.get("windowEnd"))
+    return f"{window_start} ~ {covered_through} (含)"
+
+
 def _qty(value: Any) -> str:
     number = _float(value)
     if number == int(number):
@@ -829,7 +845,7 @@ def render_site_metadata(data: SiteReportData) -> str:
         [[
             data.account,
             metadata.get("asOfDate") or "-",
-            f"{metadata.get('windowStart') or '-'} <= pay_time < {metadata.get('windowEnd') or '-'}",
+            inclusive_window_label(metadata),
             metadata.get("maturityDays") or "-",
             _qty(summary.get("salesQty")),
             _qty(summary.get("returnQty")),
@@ -955,10 +971,7 @@ def render_markdown_report(data: ReportData) -> tuple[str, str]:
     window_label = "-"
     as_of = "-"
     if first_site:
-        window_label = (
-            f"{first_site.metadata.get('windowStart') or data.since} 至 "
-            f"{first_site.metadata.get('windowEnd') or data.until or 'CURDATE-maturityDays'}"
-        )
+        window_label = inclusive_window_label(first_site.metadata, data.since)
         as_of = str(first_site.metadata.get("asOfDate") or "-")
     title = f"独立站 Shopify 退货率周报 {window_label}"
     body = [

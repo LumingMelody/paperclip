@@ -15,6 +15,7 @@ export const cohortMetadataSchema = z.object({
   asOfDate: z.string(),
   windowStart: z.string(),
   windowEnd: z.string(),
+  coveredThrough: z.string(),
   maturityDays: z.number(),
   windowIncludesImmature: z.boolean(),
 });
@@ -22,7 +23,15 @@ export const cohortMetadataSchema = z.object({
 export const siteCohortBaseInputSchema = {
   site: z.string().regex(SITE_RE, "site must be one of US/UK/FR/DE (独立站; no AU)"),
   since: z.string().regex(DATE_RE, "since must be YYYY-MM-DD"),
-  until: z.string().regex(DATE_RE, "until must be YYYY-MM-DD").optional(),
+  until: z
+    .string()
+    .regex(DATE_RE, "until must be YYYY-MM-DD")
+    .describe(
+      "Exclusive upper bound date (YYYY-MM-DD): matches pay_time >= since AND pay_time < until. " +
+        "For a full calendar month use the first of the NEXT month, e.g. all of April 2026 = until 2026-05-01. " +
+        "Output coveredThrough echoes the inclusive last day (2026-04-30).",
+    )
+    .optional(),
   maturityDays: z.coerce.number().int().min(0).max(180).optional(),
 };
 

@@ -220,6 +220,7 @@ def return_rate_by_style(
             CURDATE() AS asOfDate,
             %(since)s AS windowStart,
             CAST({effective_until} AS DATE) AS windowEnd,
+            CAST(DATE_SUB(CAST({effective_until} AS DATE), INTERVAL 1 DAY) AS DATE) AS coveredThrough,
             %(maturity_days)s AS maturityDays,
             CASE
                 WHEN {effective_until} > DATE_SUB(CURDATE(), INTERVAL %(maturity_days)s DAY) THEN TRUE
@@ -244,6 +245,7 @@ def cohort_metadata(conn, since: str, until: str | None, maturity_days: int) -> 
             CURDATE() AS asOfDate,
             %(since)s AS windowStart,
             CAST({effective_until} AS DATE) AS windowEnd,
+            CAST(DATE_SUB(CAST({effective_until} AS DATE), INTERVAL 1 DAY) AS DATE) AS coveredThrough,
             %(maturity_days)s AS maturityDays,
             CASE
                 WHEN {effective_until} > DATE_SUB(CURDATE(), INTERVAL %(maturity_days)s DAY) THEN TRUE

@@ -10,7 +10,15 @@ const inputSchema = z
   .object({
     shop: z.string().regex(SHOP_RE, "shop must look like EP-US, EP-UK, PZ-US, DAMA-US, etc."),
     since: z.string().regex(DATE_RE, "since must be YYYY-MM-DD"),
-    until: z.string().regex(DATE_RE, "until must be YYYY-MM-DD").optional(),
+    until: z
+      .string()
+      .regex(DATE_RE, "until must be YYYY-MM-DD")
+      .describe(
+        "Exclusive upper bound date (YYYY-MM-DD): matches check_date >= since AND check_date < until. " +
+          "For a full calendar month use the first of the NEXT month, e.g. all of April 2026 = until 2026-05-01. " +
+          "Output coveredThrough echoes the inclusive last day (2026-04-30).",
+      )
+      .optional(),
     top: z.coerce.number().int().min(1).max(100).optional(),
     minQty: z.coerce.number().int().min(1).optional(),
     maturityDays: z.coerce.number().int().min(0).max(180).optional(),
@@ -31,6 +39,7 @@ const outputSchema = z.object({
   asOfDate: z.string(),
   windowStart: z.string(),
   windowEnd: z.string(),
+  coveredThrough: z.string(),
   maturityDays: z.number(),
   windowIncludesImmature: z.boolean(),
 });

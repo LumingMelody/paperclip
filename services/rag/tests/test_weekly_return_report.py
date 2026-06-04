@@ -59,6 +59,29 @@ def test_reason_rows_render_share_and_wow_against_previous_window():
     assert "| B | 25.0% (10) | ↓ 50.0% |" in table
 
 
+def test_render_markdown_report_uses_inclusive_until_label():
+    data = weekly.ReportData(
+        shop="EP-US",
+        since="2026-04-01",
+        until="2026-05-01",
+        compare_since="2026-03-25",
+        current_summary={"return_count": 0, "sku_count": 0},
+        previous_summary={"return_count": 0, "sku_count": 0},
+        current_reasons=[],
+        previous_reasons=[],
+        top_skus=[],
+        previous_sku_counts={},
+        other_market_rows=[],
+        rag_answer=None,
+        rag_warning=None,
+    )
+
+    title, markdown = weekly.render_markdown_report(data)
+
+    assert title == "EP-US 退货周报 2026-04-01 ~ 2026-04-30 (含)"
+    assert "2026-04-01 至 2026-05-01" not in markdown
+
+
 @respx.mock
 def test_dingtalk_client_fetches_token_then_sends_markdown():
     token_route = respx.post(weekly.TOKEN_URL).mock(

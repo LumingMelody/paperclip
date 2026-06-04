@@ -73,6 +73,7 @@ def test_render_markdown_report_marks_de_low_sample_and_current_only():
             "asOfDate": "2026-06-03",
             "windowStart": "2026-04-12",
             "windowEnd": "2026-04-19",
+            "coveredThrough": "2026-04-18",
             "maturityDays": 45,
         },
         summary={"rowCount": 300, "orderCount": 120, "salesQty": 320, "returnQty": 64, "returnRate": 0.2},
@@ -101,7 +102,16 @@ def test_render_markdown_report_marks_de_low_sample_and_current_only():
     title, markdown = weekly_site.render_markdown_report(data)
 
     assert "独立站 Shopify 退货率周报" in title
+    assert "2026-04-12 ~ 2026-04-18 (含)" in title
+    assert "2026-04-12 ~ 2026-04-18 (含)" in markdown
+    assert "2026-04-12 <= pay_time < 2026-04-19" not in markdown
     assert "低样本提示：DE salesQty=320, returnQty=64" in markdown
     assert "current退货率" in markdown
     assert "预测" not in markdown
     assert "dirtyWarehousePct=25.0%" in markdown
+
+
+def test_inclusive_window_label_falls_back_to_window_end_minus_one_day():
+    assert weekly_site.inclusive_window_label(
+        {"windowStart": "2026-04-01", "windowEnd": "2026-05-01"}
+    ) == "2026-04-01 ~ 2026-04-30 (含)"

@@ -28,6 +28,7 @@ const metadata = {
   asOfDate: "2026-06-02",
   windowStart: "2026-01-01",
   windowEnd: "2026-04-18",
+  coveredThrough: "2026-04-17",
   maturityDays: 45,
   windowIncludesImmature: false,
 };
@@ -86,6 +87,7 @@ describe("dws.returnRateByStyle", () => {
       ...metadata,
       windowStart: "2025-12-31",
       windowEnd: "2026-05-01",
+      coveredThrough: "2026-04-30",
       maturityDays: 30,
       windowIncludesImmature: true,
     };

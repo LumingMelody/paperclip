@@ -28,6 +28,7 @@ const metadata = {
   asOfDate: "2026-06-03",
   windowStart: "2026-01-01",
   windowEnd: "2026-04-19",
+  coveredThrough: "2026-04-18",
   maturityDays: 45,
   windowIncludesImmature: false,
 };
@@ -80,6 +81,7 @@ describe("dws.siteReturnRateByStyle", () => {
       rows: [],
       ...metadata,
       windowEnd: "2026-05-01",
+      coveredThrough: "2026-04-30",
       maturityDays: 30,
       windowIncludesImmature: true,
     });

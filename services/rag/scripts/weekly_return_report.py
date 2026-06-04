@@ -105,6 +105,10 @@ def resolve_window(since_arg: str | None, until_arg: str | None) -> WeekWindow:
     return WeekWindow(since=since, until=until, compare_since=compare_since)
 
 
+def covered_through(until: str) -> str:
+    return (_parse_iso_date(until) - timedelta(days=1)).isoformat()
+
+
 def _connect() -> pymysql.Connection:
     missing = [name for name in _REQUIRED_DWS_ENV if not os.environ.get(name)]
     if missing:
@@ -481,7 +485,7 @@ def truncate_text(text: str, limit: int = 300) -> str:
 
 
 def render_markdown_report(data: ReportData) -> tuple[str, str]:
-    title = f"{data.shop} 退货周报 {data.since} 至 {data.until}"
+    title = f"{data.shop} 退货周报 {data.since} ~ {covered_through(data.until)} (含)"
     complaint_section = ""
     if data.rag_answer:
         complaint_section = truncate_text(data.rag_answer)
