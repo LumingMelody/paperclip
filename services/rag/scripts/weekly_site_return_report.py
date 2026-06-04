@@ -935,8 +935,16 @@ def render_site_report(data: SiteReportData, low_sample_sales_qty: int = DEFAULT
         "**表二：退货时间分布（仅退货行）**\n" + render_timing_table(data.timing_rows),
         "**表三A：订单件数分档退货率**\n" + render_order_unit_table(data.order_unit_rows),
         (
-            f"**表三B：发货仓退货占比与退货率**\n"
-            f"dirtyWarehousePct={_pct(data.dirty_warehouse_pct)}\n\n"
+            "**表三B：发货仓退货占比与退货率**\n"
+            f"dirtyWarehousePct={_pct(data.dirty_warehouse_pct)}\n"
+            + (
+                f"> 仓字段告警：{data.site} 仓字段缺失严重"
+                f"（无仓库记录 dirtyWarehousePct={_pct(data.dirty_warehouse_pct)}），"
+                "表三B 仅用于暴露仓字段缺失，不建议据此比较各仓退货率。\n"
+                if data.dirty_warehouse_pct >= 0.30
+                else ""
+            )
+            + "\n"
             + render_warehouse_table(data.warehouse_rows)
         ),
     ])
