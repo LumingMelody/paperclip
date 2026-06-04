@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.everpretty.paperclip-lmstudio-rag-models</string>
+
+	<!-- Keep LM Studio serving the RAG models at 32k context. LM Studio resets
+	     to a silent 4k default on every (re)start, which makes LightRAG search
+	     400 / return empty. Idempotent ensure-script runs at login (RunAtLoad)
+	     and every 10 min (StartInterval) to self-heal mid-session restarts.
+	     Companion to com.everpretty.paperclip-rag-service. -->
+	<key>ProgramArguments</key>
+	<array>
+		<string>/Users/melodylu/PycharmProjects/paperclip/services/rag/scripts/ensure_lmstudio_rag_models.sh</string>
+	</array>
+
+	<key>WorkingDirectory</key>
+	<string>/Users/melodylu/PycharmProjects/paperclip/services/rag</string>
+
+	<key>RunAtLoad</key>
+	<true/>
+
+	<key>StartInterval</key>
+	<integer>600</integer>
+
+	<key>StandardOutPath</key>
+	<string>/Users/melodylu/.paperclip/logs/lmstudio-rag-models.out.log</string>
+	<key>StandardErrorPath</key>
+	<string>/Users/melodylu/.paperclip/logs/lmstudio-rag-models.err.log</string>
+
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>HOME</key>
+		<string>/Users/melodylu</string>
+		<key>LANG</key>
+		<string>en_US.UTF-8</string>
+		<key>PATH</key>
+		<string>/Users/melodylu/.lmstudio/bin:/Users/melodylu/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+		<key>NO_PROXY</key>
+		<string>*</string>
+		<key>no_proxy</key>
+		<string>*</string>
+	</dict>
+</dict>
+</plist>
