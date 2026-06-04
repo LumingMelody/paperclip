@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.everpretty.paperclip-rag-service</string>
+
+	<!-- Long-lived RAG FastAPI service (uvicorn on :9001). Distinct from the
+	     rag-ingest / rag-weekly-report cron jobs: this one is a persistent
+	     daemon, so RunAtLoad + KeepAlive (restart on crash), no schedule. -->
+	<key>ProgramArguments</key>
+	<array>
+		<string>/Users/melodylu/PycharmProjects/paperclip/services/rag/scripts/run_dev.sh</string>
+	</array>
+
+	<key>WorkingDirectory</key>
+	<string>/Users/melodylu/PycharmProjects/paperclip/services/rag</string>
+
+	<key>RunAtLoad</key>
+	<true/>
+
+	<key>KeepAlive</key>
+	<true/>
+
+	<key>ThrottleInterval</key>
+	<integer>10</integer>
+
+	<key>StandardOutPath</key>
+	<string>/Users/melodylu/.paperclip/logs/rag-service.out.log</string>
+	<key>StandardErrorPath</key>
+	<string>/Users/melodylu/.paperclip/logs/rag-service.err.log</string>
+
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>HOME</key>
+		<string>/Users/melodylu</string>
+		<key>LANG</key>
+		<string>en_US.UTF-8</string>
+		<!-- ~/.local/bin first so run_dev.sh's bare `uv` resolves under launchd
+		     (launchd does not source ~/.zshrc). -->
+		<key>PATH</key>
+		<string>/Users/melodylu/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+		<!-- Bypass macOS system proxy (Clash etc.) so the service's httpx
+		     calls to LM Studio at 127.0.0.1:1234 are not hijacked by the
+		     local proxy (python-httpx-macos-system-proxy-trap). -->
+		<key>NO_PROXY</key>
+		<string>*</string>
+		<key>no_proxy</key>
+		<string>*</string>
+	</dict>
+</dict>
+</plist>
