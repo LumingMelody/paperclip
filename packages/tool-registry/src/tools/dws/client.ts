@@ -16,6 +16,7 @@ export type DwsQueryRequest =
       maturityDays?: number;
       style?: string;
     }
+  | { op: "amazonSalesByStyle"; account: string; since: string; until?: string; top?: number; style?: string }
   | { op: "siteTopStyles"; account: string; since: string; top?: number; style?: string }
   | {
       op: "siteReturnRateByStyle";

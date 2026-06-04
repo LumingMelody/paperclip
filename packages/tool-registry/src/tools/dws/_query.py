@@ -235,6 +235,58 @@ def return_rate_by_style(
     return {"rows": out, **metadata}
 
 
+def amazon_sales_by_style(
+    conn,
+    account: str,
+    since: str,
+    until: str | None,
+    top: int,
+    style: str | None = None,
+) -> dict[str, Any]:
+    sql = """
+        SELECT
+            LEFT(processed_sku,7) AS styleCode,
+            CAST(COALESCE(SUM(qty),0) AS DECIMAL(20,0)) AS salesQty,
+            COUNT(DISTINCT order_id) AS orderCount,
+            COUNT(DISTINCT processed_sku) AS skuCount,
+            MIN(DATE(statistic_time_local)) AS firstSaleDate,
+            MAX(DATE(statistic_time_local)) AS lastSaleDate
+        FROM dws_od_amazon_order_d
+        WHERE Account=%(account)s AND statistic_time_local>=%(since)s
+          AND is_allcard IN (0,1)
+          AND original_sku IS NOT NULL AND original_sku<>'' AND original_sku NOT LIKE 'YS%%'
+          AND processed_sku IS NOT NULL AND processed_sku<>''
+    """
+    params: dict[str, Any] = {"account": account, "since": since, "top": top}
+    if until:
+        sql += " AND statistic_time_local < %(until)s"
+        params["until"] = until
+    if style is not None:
+        sql += " AND LEFT(processed_sku,7)=%(style)s"
+        params["style"] = style
+    sql += " GROUP BY LEFT(processed_sku,7)"
+    if style is None:
+        sql += " ORDER BY salesQty DESC LIMIT %(top)s"
+    with conn.cursor() as cur:
+        cur.execute(sql, params)
+        rows = [serialize_row(r) for r in cur.fetchall()]
+
+    metadata_sql = """
+        SELECT
+            CURDATE() AS asOfDate,
+            %(since)s AS windowStart,
+            CAST(%(until)s AS DATE) AS windowEnd,
+            CASE
+                WHEN %(until)s IS NULL THEN NULL
+                ELSE CAST(DATE_SUB(CAST(%(until)s AS DATE), INTERVAL 1 DAY) AS DATE)
+            END AS coveredThrough
+    """
+    with conn.cursor() as cur:
+        cur.execute(metadata_sql, {"since": since, "until": until})
+        metadata = serialize_row(cur.fetchone())
+    return {"rows": rows, **metadata}
+
+
 def cohort_metadata(conn, since: str, until: str | None, maturity_days: int) -> tuple[str, dict[str, Any]]:
     effective_until = "%(until)s" if until else "DATE_SUB(CURDATE(), INTERVAL %(maturity_days)s DAY)"
     params: dict[str, Any] = {"since": since, "maturity_days": maturity_days}
@@ -770,6 +822,16 @@ def main() -> None:
                 top=int(req.get("top", 20)),
                 min_qty=int(req.get("minQty", 50)),
                 maturity_days=int(req.get("maturityDays", 45)),
+                style=req.get("style"),
+            )
+            emit(result)
+        elif op == "amazonSalesByStyle":
+            result = amazon_sales_by_style(
+                conn,
+                account=req["account"],
+                since=req["since"],
+                until=req.get("until"),
+                top=int(req.get("top", 20)),
                 style=req.get("style"),
             )
             emit(result)

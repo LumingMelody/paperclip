@@ -11,6 +11,7 @@ import { stockoutRiskDescriptor } from "./tools/lingxing/stockoutRisk.js";
 import { topSkusDescriptor } from "./tools/lingxing/topSkus.js";
 import { returnReasonsDescriptor } from "./tools/dws/returnReasons.js";
 import { returnRateByStyleDescriptor } from "./tools/dws/returnRateByStyle.js";
+import { amazonSalesByStyleDescriptor } from "./tools/dws/amazonSalesByStyle.js";
 import { siteTopStylesDescriptor } from "./tools/dws/siteTopStyles.js";
 import { siteReturnRateByStyleDescriptor } from "./tools/dws/siteReturnRateByStyle.js";
 import { siteReturnTimingByStyleDescriptor } from "./tools/dws/siteReturnTimingByStyle.js";
@@ -62,6 +63,7 @@ export const tools: ToolDescriptor[] = [
   stockoutRiskDescriptor,
   returnReasonsDescriptor,
   returnRateByStyleDescriptor,
+  amazonSalesByStyleDescriptor,
   siteTopStylesDescriptor,
   siteReturnRateByStyleDescriptor,
   siteReturnTimingByStyleDescriptor,
