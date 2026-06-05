@@ -85,6 +85,8 @@ export interface Config {
   feedbackExportBackendToken: string | undefined;
   heartbeatSchedulerEnabled: boolean;
   heartbeatSchedulerIntervalMs: number;
+  conciergeAgentId: string | undefined;
+  conciergeAnswerTimeoutMs: number;
   companyDeletionEnabled: boolean;
   telemetryEnabled: boolean;
 }
@@ -106,6 +108,13 @@ function detectTailnetBindHost(): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+function readBoundedIntegerEnv(name: string, fallback: number, min: number, max: number) {
+  const raw = process.env[name];
+  const parsed = raw === undefined ? fallback : Number(raw);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(max, Math.max(min, Math.floor(parsed)));
 }
 
 export function loadConfig(): Config {
@@ -331,6 +340,13 @@ export function loadConfig(): Config {
     feedbackExportBackendToken,
     heartbeatSchedulerEnabled: process.env.HEARTBEAT_SCHEDULER_ENABLED !== "false",
     heartbeatSchedulerIntervalMs: Math.max(10000, Number(process.env.HEARTBEAT_SCHEDULER_INTERVAL_MS) || 30000),
+    conciergeAgentId: process.env.PAPERCLIP_CONCIERGE_AGENT_ID?.trim() || undefined,
+    conciergeAnswerTimeoutMs: readBoundedIntegerEnv(
+      "CONCIERGE_ANSWER_TIMEOUT_MS",
+      600000,
+      60000,
+      840000,
+    ),
     companyDeletionEnabled,
     telemetryEnabled: fileConfig?.telemetry?.enabled ?? true,
   };

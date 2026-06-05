@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, inArray, isNull, notInArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, notInArray, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
   DEFAULT_ISSUE_GRAPH_LIVENESS_AUTO_RECOVERY_LOOKBACK_HOURS,
@@ -8,6 +8,7 @@ import {
   type IssueGraphLivenessAutoRecoveryPreviewItem,
 } from "@paperclipai/shared";
 import {
+  activityLog,
   agents,
   agentWakeupRequests,
   approvals,
@@ -16,6 +17,7 @@ import {
   heartbeatRunWatchdogDecisions,
   heartbeatRuns,
   issueApprovals,
+  issueComments,
   issueRelations,
   issueThreadInteractions,
   issues,
@@ -53,6 +55,22 @@ const ACTIVE_RUN_OUTPUT_EVIDENCE_TAIL_BYTES = 8 * 1024;
 const STRANDED_ISSUE_RECOVERY_ORIGIN_KIND = RECOVERY_ORIGIN_KINDS.strandedIssueRecovery;
 const STALE_ACTIVE_RUN_EVALUATION_ORIGIN_KIND = RECOVERY_ORIGIN_KINDS.staleActiveRunEvaluation;
 const DEFERRED_WAKE_CONTEXT_KEY = "_paperclipWakeContext";
+export const CONCIERGE_ANSWER_TIMEOUT_FALLBACK_MARKER = "⏱ Concierge answer timeout fallback";
+// Author of the system fallback comment. It must be excluded from the inbound
+// user-comment anchor: otherwise posting a fallback moves the anchor forward,
+// which both breaks idempotency and makes the issue look freshly active.
+const CONCIERGE_ANSWER_TIMEOUT_FALLBACK_AUTHOR_USER_ID = "system";
+const CONCIERGE_ANSWER_TIMEOUT_FALLBACK_BODY = [
+  CONCIERGE_ANSWER_TIMEOUT_FALLBACK_MARKER,
+  "",
+  "## ⏱处理超过系统时限",
+  "",
+  "已返回兜底：这次请求没有在系统限定时间内完成，系统先结束当前会话，避免群聊一直等待。",
+  "",
+  "建议把问题拆成更小、更具体的一步后重试；如果需要我继续处理，请补充目标、范围和期望输出。",
+].join("\n");
+const CONCIERGE_ANSWER_TIMEOUT_OPEN_STATUSES = ["todo", "in_progress", "in_review", "blocked"] as const;
+const CONCIERGE_ANSWER_TIMEOUT_ACTIVE_RUN_STATUSES = ["queued", "running"] as const;
 
 type RecoveryWakeupOptions = {
   source?: "timer" | "assignment" | "on_demand" | "automation";
@@ -93,6 +111,19 @@ export type RunOutputSilenceSummary = {
   evaluationIssueId: string | null;
   evaluationIssueIdentifier: string | null;
   evaluationIssueAssigneeAgentId: string | null;
+};
+
+export type ConciergeAnswerTimeoutReconcileInput = {
+  now: Date;
+  conciergeAgentId: string;
+  timeoutMs: number;
+};
+
+export type ConciergeAnswerTimeoutReconcileResult = {
+  candidates: number;
+  timedOut: number;
+  fallbackPosted: number;
+  skippedIdempotent: number;
 };
 
 function readNonEmptyString(value: unknown): string | null {
@@ -1086,6 +1117,214 @@ export function recoveryService(db: Db, deps: { enqueueWakeup: RecoveryWakeup })
       else result.skipped += 1;
       if ("evaluationIssueId" in outcome && outcome.evaluationIssueId) {
         result.evaluationIssueIds.push(outcome.evaluationIssueId);
+      }
+    }
+
+    return result;
+  }
+
+  // Latest inbound user chat comment time per issue, used as the timeout anchor.
+  // NOTE: a Drizzle inline correlated subquery (referencing the outer issues row
+  // inside a sql`` template) silently returned NULL here, so we batch-load the
+  // anchors with an explicit GROUP BY keyed by issueId instead. User (chat)
+  // comments have authorUserId set and createdByRunId null; the system timeout
+  // fallback comment uses authorUserId="system" but is excluded downstream by the
+  // post-anchor idempotency marker check, not here.
+  async function loadInboundUserChatAnchors(
+    dbOrTx: Db,
+    issueIds: string[],
+  ): Promise<Map<string, Date>> {
+    const anchors = new Map<string, Date>();
+    if (issueIds.length === 0) return anchors;
+    const rows = await dbOrTx
+      .select({
+        issueId: issueComments.issueId,
+        anchor: sql<Date>`max(${issueComments.createdAt})`.mapWith(issueComments.createdAt),
+      })
+      .from(issueComments)
+      .where(
+        and(
+          inArray(issueComments.issueId, issueIds),
+          isNotNull(issueComments.authorUserId),
+          isNull(issueComments.createdByRunId),
+          sql`${issueComments.authorUserId} <> ${CONCIERGE_ANSWER_TIMEOUT_FALLBACK_AUTHOR_USER_ID}`,
+        ),
+      )
+      .groupBy(issueComments.issueId);
+    for (const row of rows) {
+      if (row.anchor) anchors.set(row.issueId, row.anchor);
+    }
+    return anchors;
+  }
+
+  async function findLatestConciergeRunForIssue(
+    dbOrTx: Db,
+    input: { companyId: string; issueId: string; conciergeAgentId: string },
+  ) {
+    return dbOrTx
+      .select({
+        id: heartbeatRuns.id,
+        status: heartbeatRuns.status,
+      })
+      .from(heartbeatRuns)
+      .where(
+        and(
+          eq(heartbeatRuns.companyId, input.companyId),
+          eq(heartbeatRuns.agentId, input.conciergeAgentId),
+          sql`${heartbeatRuns.contextSnapshot} ->> 'issueId' = ${input.issueId}`,
+        ),
+      )
+      .orderBy(desc(heartbeatRuns.createdAt), desc(heartbeatRuns.id))
+      .limit(1)
+      .then((rows) => rows[0] ?? null);
+  }
+
+  async function reconcileConciergeAnswerTimeout(input: ConciergeAnswerTimeoutReconcileInput) {
+    const result: ConciergeAnswerTimeoutReconcileResult = {
+      candidates: 0,
+      timedOut: 0,
+      fallbackPosted: 0,
+      skippedIdempotent: 0,
+    };
+    if (!input.conciergeAgentId || input.timeoutMs <= 0) return result;
+
+    const candidates = await db
+      .select({
+        id: issues.id,
+        companyId: issues.companyId,
+      })
+      .from(issues)
+      .where(
+        and(
+          eq(issues.assigneeAgentId, input.conciergeAgentId),
+          sql`${issues.dingtalkConversationKey} is not null`,
+          isNull(issues.hiddenAt),
+          isNull(issues.parentId),
+          inArray(issues.status, [...CONCIERGE_ANSWER_TIMEOUT_OPEN_STATUSES]),
+        ),
+      )
+      .orderBy(asc(issues.id))
+      .limit(100);
+
+    result.candidates = candidates.length;
+
+    const anchors = await loadInboundUserChatAnchors(
+      db,
+      candidates.map((candidate) => candidate.id),
+    );
+
+    for (const candidate of candidates) {
+      const candidateAnchor = anchors.get(candidate.id);
+      if (!candidateAnchor) continue;
+      if (input.now.getTime() - candidateAnchor.getTime() < input.timeoutMs) continue;
+
+      const outcome = await db.transaction(async (tx) => {
+        await tx.execute(sql`select ${issues.id} from ${issues} where ${issues.id} = ${candidate.id} for update`);
+
+        const current = await tx
+          .select({
+            id: issues.id,
+            companyId: issues.companyId,
+            status: issues.status,
+          })
+          .from(issues)
+          .where(
+            and(
+              eq(issues.id, candidate.id),
+              eq(issues.assigneeAgentId, input.conciergeAgentId),
+              sql`${issues.dingtalkConversationKey} is not null`,
+              isNull(issues.hiddenAt),
+              isNull(issues.parentId),
+              inArray(issues.status, [...CONCIERGE_ANSWER_TIMEOUT_OPEN_STATUSES]),
+            ),
+          )
+          .limit(1)
+          .then((rows) => rows[0] ?? null);
+
+        if (!current) return { kind: "skipped" as const };
+        const txAnchors = await loadInboundUserChatAnchors(tx as unknown as Db, [current.id]);
+        const currentAnchor = txAnchors.get(current.id);
+        if (!currentAnchor) return { kind: "skipped" as const };
+        if (input.now.getTime() - currentAnchor.getTime() < input.timeoutMs) {
+          return { kind: "skipped" as const };
+        }
+
+        const existingFallback = await tx
+          .select({ id: issueComments.id })
+          .from(issueComments)
+          .where(
+            and(
+              eq(issueComments.companyId, current.companyId),
+              eq(issueComments.issueId, current.id),
+              gt(issueComments.createdAt, currentAnchor),
+              sql`${issueComments.body} like ${`${CONCIERGE_ANSWER_TIMEOUT_FALLBACK_MARKER}%`}`,
+            ),
+          )
+          .limit(1)
+          .then((rows) => rows[0] ?? null);
+
+        if (existingFallback) return { kind: "idempotent" as const };
+
+        const latestRun = await findLatestConciergeRunForIssue(tx as unknown as Db, {
+          companyId: current.companyId,
+          issueId: current.id,
+          conciergeAgentId: input.conciergeAgentId,
+        });
+        const activeRunId =
+          latestRun && CONCIERGE_ANSWER_TIMEOUT_ACTIVE_RUN_STATUSES.includes(
+            latestRun.status as (typeof CONCIERGE_ANSWER_TIMEOUT_ACTIVE_RUN_STATUSES)[number],
+          )
+            ? latestRun.id
+            : null;
+
+        await tx.insert(issueComments).values({
+          companyId: current.companyId,
+          issueId: current.id,
+          authorUserId: CONCIERGE_ANSWER_TIMEOUT_FALLBACK_AUTHOR_USER_ID,
+          createdByRunId: null,
+          body: CONCIERGE_ANSWER_TIMEOUT_FALLBACK_BODY,
+          createdAt: input.now,
+          updatedAt: input.now,
+        } as typeof issueComments.$inferInsert);
+
+        await tx
+          .update(issues)
+          .set({
+            status: "done",
+            completedAt: input.now,
+            updatedAt: input.now,
+          })
+          .where(eq(issues.id, current.id));
+
+        await tx.insert(activityLog).values({
+          companyId: current.companyId,
+          actorType: "system",
+          actorId: "system",
+          action: "concierge.answer_timeout_fallback_posted",
+          entityType: "issue",
+          entityId: current.id,
+          agentId: input.conciergeAgentId,
+          runId: activeRunId,
+          details: {
+            source: "recovery.reconcile_concierge_answer_timeout",
+            anchor: currentAnchor.toISOString(),
+            timeoutMs: input.timeoutMs,
+            latestRunId: latestRun?.id ?? null,
+            latestRunStatus: latestRun?.status ?? null,
+            activeRunId,
+            cancellation: activeRunId ? "TODO: cancel active Concierge run when cancellation dependency is available" : null,
+          },
+        } as typeof activityLog.$inferInsert);
+
+        return { kind: "posted" as const };
+      });
+
+      if (outcome.kind === "posted") {
+        result.timedOut += 1;
+        result.fallbackPosted += 1;
+      } else if (outcome.kind === "idempotent") {
+        result.timedOut += 1;
+        result.skippedIdempotent += 1;
       }
     }
 
@@ -2525,6 +2764,7 @@ export function recoveryService(db: Db, deps: { enqueueWakeup: RecoveryWakeup })
     escalateStrandedAssignedIssue,
     recordWatchdogDecision,
     scanSilentActiveRuns,
+    reconcileConciergeAnswerTimeout,
     reconcileStrandedAssignedIssues,
     buildIssueGraphLivenessAutoRecoveryPreview,
     reconcileIssueGraphLiveness,

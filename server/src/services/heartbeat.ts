@@ -4561,6 +4561,14 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
     return recovery.scanSilentActiveRuns(opts);
   }
 
+  async function reconcileConciergeAnswerTimeout(opts: {
+    now: Date;
+    conciergeAgentId: string;
+    timeoutMs: number;
+  }) {
+    return recovery.reconcileConciergeAnswerTimeout(opts);
+  }
+
   async function reconcileProductivityReviews(opts?: { now?: Date; companyId?: string }) {
     return productivityReviews.reconcileProductivityReviews(opts);
   }
@@ -7555,6 +7563,8 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
     reconcileIssueGraphLiveness,
 
     scanSilentActiveRuns,
+
+    reconcileConciergeAnswerTimeout,
 
     reconcileProductivityReviews,
 

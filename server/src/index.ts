@@ -722,6 +722,17 @@ export async function startServer(): Promise<StartedServer> {
         }
       })
       .then(async () => {
+        if (!config.conciergeAgentId) return;
+        const reconciled = await heartbeat.reconcileConciergeAnswerTimeout({
+          now: new Date(),
+          conciergeAgentId: config.conciergeAgentId,
+          timeoutMs: config.conciergeAnswerTimeoutMs,
+        });
+        if (reconciled.fallbackPosted > 0 || reconciled.skippedIdempotent > 0) {
+          logger.warn({ ...reconciled }, "startup concierge answer-timeout watchdog posted fallback comments");
+        }
+      })
+      .then(async () => {
         const reviewed = await heartbeat.reconcileProductivityReviews();
         if (reviewed.created > 0 || reviewed.updated > 0 || reviewed.failed > 0) {
           logger.warn({ ...reviewed }, "startup productivity reconciliation created or updated review work");
@@ -784,6 +795,17 @@ export async function startServer(): Promise<StartedServer> {
           const scanned = await heartbeat.scanSilentActiveRuns();
           if (scanned.created > 0 || scanned.escalated > 0) {
             logger.warn({ ...scanned }, "periodic active-run output watchdog created review work");
+          }
+        })
+        .then(async () => {
+          if (!config.conciergeAgentId) return;
+          const reconciled = await heartbeat.reconcileConciergeAnswerTimeout({
+            now: new Date(),
+            conciergeAgentId: config.conciergeAgentId,
+            timeoutMs: config.conciergeAnswerTimeoutMs,
+          });
+          if (reconciled.fallbackPosted > 0 || reconciled.skippedIdempotent > 0) {
+            logger.warn({ ...reconciled }, "periodic concierge answer-timeout watchdog posted fallback comments");
           }
         })
         .then(async () => {
