@@ -46,8 +46,26 @@ describe("dws.salesSummary", () => {
 
   it("queries canonical company-wide sales summary through the python helper and returns rows", async () => {
     const rows = [
-      { groupKey: "Amazon", currency: "USD", gmv: 12345.6789, units: 321, orderCount: 250 },
-      { groupKey: "Shopify", currency: "GBP", gmv: 9876.5432, units: 210, orderCount: 175 },
+      {
+        groupKey: "Amazon",
+        currency: "USD",
+        gmv: 12345.6789,
+        units: 321,
+        orderCount: 250,
+        refundAmount: 123.4567,
+        refundRate: 0.048,
+        netSales: 12222.2222,
+      },
+      {
+        groupKey: "Shopify",
+        currency: "GBP",
+        gmv: 9876.5432,
+        units: 210,
+        orderCount: 175,
+        refundAmount: 0,
+        refundRate: null,
+        netSales: 9876.5432,
+      },
     ];
     mocks.runPythonHelper.mockResolvedValue({ version: "1", rows, ...metadata });
     const input = salesSummaryDescriptor.inputSchema.parse({ since: "2026-05-01" });
@@ -83,7 +101,18 @@ describe("dws.salesSummary", () => {
   });
 
   it("forwards explicit until / groupBy / platform / top overrides to the helper", async () => {
-    const rows = [{ groupKey: "2026-05", currency: "USD", gmv: 12345.6789, units: 321, orderCount: 250 }];
+    const rows = [
+      {
+        groupKey: "2026-05",
+        currency: "USD",
+        gmv: 12345.6789,
+        units: 321,
+        orderCount: 250,
+        refundAmount: 123.4567,
+        refundRate: 0.048,
+        netSales: 12222.2222,
+      },
+    ];
     mocks.runPythonHelper.mockResolvedValue({
       version: "1",
       rows,
@@ -124,7 +153,18 @@ describe("dws.salesSummary", () => {
   });
 
   it("forwards style and account filters with style grouping to the helper", async () => {
-    const rows = [{ groupKey: "EG02778", currency: "USD", gmv: 1234.56, units: 42, orderCount: 35 }];
+    const rows = [
+      {
+        groupKey: "EG02778",
+        currency: "USD",
+        gmv: 1234.56,
+        units: 42,
+        orderCount: 35,
+        refundAmount: 34.56,
+        refundRate: 0.057143,
+        netSales: 1200,
+      },
+    ];
     mocks.runPythonHelper.mockResolvedValue({
       version: "1",
       rows,

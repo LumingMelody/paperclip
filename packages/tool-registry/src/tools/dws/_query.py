@@ -322,7 +322,10 @@ def sales_summary(
             currency AS currency,
             ROUND(COALESCE(SUM(CASE WHEN is_allcard=0 THEN actual_pay ELSE 0 END),0),4) AS gmv,
             COALESCE(SUM(CASE WHEN is_allcard IN (0,1) AND original_sku NOT LIKE 'YS%%' THEN qty ELSE 0 END),0) AS units,
-            COUNT(DISTINCT order_id) AS orderCount
+            COUNT(DISTINCT order_id) AS orderCount,
+            ROUND(COALESCE(SUM(CASE WHEN (is_allcard=0 OR is_allcard IS NULL) AND refund_statistic_time IS NOT NULL THEN refund_price ELSE 0 END),0),4) AS refundAmount,
+            ROUND(COUNT(DISTINCT CASE WHEN refund_order_id IS NOT NULL THEN order_id END) / NULLIF(COUNT(DISTINCT order_id),0), 6) AS refundRate,
+            ROUND(COALESCE(SUM(CASE WHEN is_allcard=0 THEN actual_pay ELSE 0 END),0) - COALESCE(SUM(CASE WHEN (is_allcard=0 OR is_allcard IS NULL) AND refund_statistic_time IS NOT NULL THEN refund_price ELSE 0 END),0), 4) AS netSales
         FROM dwa_od_order_d_v1
         WHERE statistic_time_local >= %(since)s
           AND original_sku <> ''
