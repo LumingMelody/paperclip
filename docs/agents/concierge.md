@@ -230,21 +230,28 @@ via Concierge 派单 → Finance ✓ + ProductSizing ✓ + Supply ⚠️ (超时
 
 ⚠️ **金额按币种分行返回**（每行带 `currency`：USD/GBP/EUR/CNY…）—— **绝不要把不同币种的 `gmv` / `refundAmount` / `netSales` 直接相加**。要公司总额就按币种各报一行，或估算换算（约 1.27 USD/GBP、1.08 USD/EUR）后标「约」。`units`/`orderCount` 可以跨币种相加；`refundRate` 是比率、按币种各看。
 
-⚠️ **单款 GMV 也走这里**（传 `style="款号"`）—— `dwa_od_order_d_v1` 有 processed_sku，能直接算出某款金额，**不要因为是单款就退回 lingxing**（领星对新款有 2–7 天入库滞后，常返回 NotFound）。lingxing 只留给 **ASIN 级 评分 / 评论 / 广告** 和带广告口径的畅销榜（`lingxing.topSkus` / `lingxing.factSku` / `lingxing.styleSummary`）；**Amazon 单款新鲜件数** 走 `dws.amazonSalesByStyle`；**独立站单款件数** 走 `dws.siteTopStyles`。`oms.salesByChannel` 仅在需要 OMS 内部渠道视角时用，公司级总额以 `dws.salesSummary` 为准。
+⚠️ **单款 GMV 也走这里**（传 `style="款号"`）—— `dwa_od_order_d_v1` 有 processed_sku，能直接算出某款金额，**不要因为是单款就退回 lingxing**（领星对新款有 2–7 天入库滞后，常返回 NotFound）。lingxing 只留给 **ASIN 级 评分 / 评论 / 广告** 和带广告口径的畅销榜（`lingxing.topSkus` / `lingxing.factSku` / `lingxing.styleSummary`）；**Amazon 单款的销量+GMV 也走 `dws.salesSummary`**（一张表同时出 units+gmv，口径一致；`amazonSalesByStyle` 只判"是否开卖/首末销售日"）；**独立站单款件数** 走 `dws.siteTopStyles`。`oms.salesByChannel` 仅在需要 OMS 内部渠道视角时用，公司级总额以 `dws.salesSummary` 为准。
 
-### Amazon 新鲜销量 / 是否开卖 —— 走 dws.amazonSalesByStyle
+### Amazon 某款「销量 + GMV」—— 走 dws.salesSummary（一张表，口径一致）
 
-Amazon「某款有没有销量 / 新上架款是否开卖 / 最近卖了多少件」优先用 `dws.amazonSalesByStyle`（来自 `dws_od_amazon_order_d`，T+0 新鲜，按 `LEFT(processed_sku,7)` 聚合件数）。不要先走领星查新 ASIN，因为领星对新 ASIN 有入库滞后。
-
-`dws.amazonSalesByStyle` 输入 `shop + since`，可选 `until`（exclusive）、`style`、`top`：
+Amazon 单款的**销量和 GMV 都从 `dws.salesSummary` 出**（dwa 宽表 `dwa_od_order_d_v1`，一次返回 units+gmv，按币种）。**不要**把销量丢给 `dws.amazonSalesByStyle`、GMV 丢给宽表——两张表会对不上。
 
 | 问题 | 调用 |
 |------|------|
-| 「EG02778 在 EP-US 最近有没有销量 / 开卖了吗」 | `dws.amazonSalesByStyle(shop="EP-US", since=…, style="EG02778")`，看 `salesQty/orderCount/firstSaleDate/lastSaleDate` |
-| 「EP-US 新款最近卖了多少件」 | `dws.amazonSalesByStyle(shop="EP-US", since=…, style="<款号>")` |
-| 「EP-US 最近哪些款卖得最多」 | `dws.amazonSalesByStyle(shop="EP-US", since=…, top=N)`（按件数 `salesQty` 排） |
+| 「EG02778 6月1号 的销量和 GMV」 | `dws.salesSummary(since="2026-06-01", until="2026-06-02", style="EG02778", groupBy="none")` |
+| 「EG02778 在 EP-US 卖了多少 / GMV」 | 加 `account="AmazonEPUS"` |
 
-⚠️ **只有件数（salesQty/orderCount/skuCount），没有 GMV** —— 要 **GMV（公司级 / 按平台·店铺 / 单款）** 一律走 `dws.salesSummary`（单款传 `style=`，店铺加 `account=`）；只有 **ASIN 级 评分 / 评论 / 广告数据** 才走 `lingxing.factSku` / `lingxing.styleSummary` / `lingxing.topSkus`。
+⚠️ **单日查询**：`until` 是**开区间(exclusive)**。问"6月1号当天"必须传 `since=2026-06-01, until=2026-06-02`（次日），**不能** until 写成同一天，否则窗口为空、返回 0。
+
+⚠️ **工具返回空(0 行)时，绝不要臆测原因**——"ETL 入库延迟""款号前缀没落地"这类都是**幻觉**，禁止编。`dws.salesSummary` 命中宽表全量刷新窗口(北京 9:00/13:00/17:30 DROP+INSERT)会**直接返回 UpstreamError「正在全量刷新，请稍后重试」**；照它说的回"数据源刷新中，稍后重试"，不要据空结果断言"无销量/无 GMV"。
+
+#### `dws.amazonSalesByStyle` 现在只用于：是否开卖 / 首末销售日 / T+0 最新鲜
+
+来自 `dws_od_amazon_order_d`（比宽表更实时）。**只有件数没有 GMV**，且件数口径可能与 salesSummary 略有出入——**报销量数字以 salesSummary 为准**，这个工具只回答"这款近期有没有开卖、首/末销售日"。
+
+| 问题 | 调用 |
+|------|------|
+| 「EG02778 在 EP-US 最近有没有开卖 / 首次销售日」 | `dws.amazonSalesByStyle(shop="EP-US", since=…, style="EG02778")`，看 `firstSaleDate/lastSaleDate` |
 ⚠️ **有销量只能说「近期已有 Amazon 订单」**，不能说「listing 当前一定在线」。销量是订单事实，不是实时 listing 在线状态。
 ⚠️ 如果只查了领星而领星查不到，**不得断言「无记录 / 未上架 / 无销量」**。必须说明「只查了领星，领星对新 ASIN 可能滞后」，并补跑或附上 `dws.amazonSalesByStyle` 的新鲜销量结果。
 
