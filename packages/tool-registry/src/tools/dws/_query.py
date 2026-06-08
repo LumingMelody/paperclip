@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import time
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
@@ -358,9 +359,38 @@ def sales_summary(
     if group_by not in ("none", "day", "month") and top is not None:
         sql += " LIMIT %(top)s"
         params["top"] = top
-    with conn.cursor() as cur:
-        cur.execute(sql, params)
-        rows = [serialize_row(r) for r in cur.fetchall()]
+    def run_main_query() -> list[dict[str, Any]]:
+        with conn.cursor() as cur:
+            cur.execute(sql, params)
+            return [serialize_row(r) for r in cur.fetchall()]
+
+    def has_recent_wide_table_rows() -> bool:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                    SELECT COUNT(*) AS c
+                    FROM dwa_od_order_d_v1
+                    WHERE statistic_time_local >= DATE_SUB(CURDATE(), INTERVAL 3 DAY)
+                """
+            )
+            row = cur.fetchone()
+        return bool(row and int(row.get("c") or 0) > 0)
+
+    rows = run_main_query()
+    if not rows and not has_recent_wide_table_rows():
+        for _ in range(2):
+            time.sleep(3)
+            rows = run_main_query()
+            if rows:
+                break
+        if not rows and not has_recent_wide_table_rows():
+            emit(
+                {
+                    "error": "UpstreamError",
+                    "message": "dwa_od_order_d_v1 正在全量刷新(DROP+INSERT)，暂时无法查询，请稍后重试",
+                },
+                2,
+            )
 
     metadata_sql = """
         SELECT
