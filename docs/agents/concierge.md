@@ -215,7 +215,7 @@ via Concierge 派单 → Finance ✓ + ProductSizing ✓ + Supply ⚠️ (超时
 
 公司整体或按 **平台 / 店铺 / BU / 国家 / 日 / 月** 维度的 **销售额(GMV) / 订单数 / 销量(件数)**，一律用 `dws.salesSummary`（来自四平台统一订单宽表 `dwa_od_order_d_v1`：Amazon+Shopify+Shein+易仓）。这是公司级销售数字的**唯一口径来源**，避免 OMS / 领星 各算各的对不上。
 
-口径（工具内已固化）：GMV=不含礼品卡的实收金额，销量=排除 YS 保险件，订单数=去重 order_id；已滤掉无 SKU 的财务补充行；时间维度 `statistic_time_local`。输入 `since`，可选 `until`(exclusive) / `groupBy`(platform|account|bu|country|day|month|**style**|none，默认 platform) / `platform` / `account`(精确店铺名，如 `AmazonEPUS`) / `style`(7位款号，单款 GMV) / `top`：
+口径（工具内已按 `dwa_od_order_d.md` §8 固化）：GMV=不含礼品卡的实收金额，销量=排除 YS 保险件，订单数=去重 order_id，**退款金额(`refundAmount`)**=SUM(refund_price，is_allcard∈{0,NULL} 且 refund_statistic_time 非空)，**订单退款率(`refundRate`)**=有退货记录的订单÷总订单（**订单级**），**净销售额(`netSales`)**=GMV−退款金额；已滤掉无 SKU 的财务补充行；时间维度 `statistic_time_local`（退款同窗口同 cohort）。输入 `since`，可选 `until`(exclusive) / `groupBy`(platform|account|bu|country|day|month|**style**|none，默认 platform) / `platform` / `account`(精确店铺名，如 `AmazonEPUS`) / `style`(7位款号，单款 GMV) / `top`：
 
 | 问题 | 调用 |
 |------|------|
@@ -224,8 +224,11 @@ via Concierge 派单 → Finance ✓ + ProductSizing ✓ + Supply ⚠️ (超时
 | 「按月看销售额 / 订单 / 销量走势」 | `dws.salesSummary(since=…, groupBy="month")` |
 | 「Shopify 独立站这季度卖了多少钱」 | `dws.salesSummary(since=…, platform="Shopify", groupBy="none")` |
 | 「**EG02778 的 GMV / 这个款卖了多少钱**」 | `dws.salesSummary(since=…, style="EG02778", groupBy="none")`（要某店铺加 `account="AmazonEPUS"`） |
+| 「公司/某平台 退款金额 / 净销售额 / 订单退款率」 | `dws.salesSummary(since=…, until=…, groupBy="none"`或`"platform")`，看 `refundAmount` / `netSales` / `refundRate` |
 
-⚠️ **GMV 按币种分行返回**（每行带 `currency`：USD/GBP/EUR/CNY…）—— **绝不要把不同币种的 gmv 直接相加**。要公司总额就按币种各报一行，或估算换算（约 1.27 USD/GBP、1.08 USD/EUR）后标「约」。`units`/`orderCount` 可以跨币种相加。
+⚠️ **退款率有两个不同口径，别混**：salesSummary 的 `refundRate` 是**订单级·全平台·宽表**（有退货记录的订单占比，§8 口径）；`dws.returnRateByStyle` 是**件数级·Amazon 单平台·按款·带成熟度窗口**（rf_qty/qty）。问「某款退货率」用 `returnRateByStyle`；问「公司/平台整体订单退款比例」用 `salesSummary` 的 `refundRate`。
+
+⚠️ **金额按币种分行返回**（每行带 `currency`：USD/GBP/EUR/CNY…）—— **绝不要把不同币种的 `gmv` / `refundAmount` / `netSales` 直接相加**。要公司总额就按币种各报一行，或估算换算（约 1.27 USD/GBP、1.08 USD/EUR）后标「约」。`units`/`orderCount` 可以跨币种相加；`refundRate` 是比率、按币种各看。
 
 ⚠️ **单款 GMV 也走这里**（传 `style="款号"`）—— `dwa_od_order_d_v1` 有 processed_sku，能直接算出某款金额，**不要因为是单款就退回 lingxing**（领星对新款有 2–7 天入库滞后，常返回 NotFound）。lingxing 只留给 **ASIN 级 评分 / 评论 / 广告** 和带广告口径的畅销榜（`lingxing.topSkus` / `lingxing.factSku` / `lingxing.styleSummary`）；**Amazon 单款新鲜件数** 走 `dws.amazonSalesByStyle`；**独立站单款件数** 走 `dws.siteTopStyles`。`oms.salesByChannel` 仅在需要 OMS 内部渠道视角时用，公司级总额以 `dws.salesSummary` 为准。
 
