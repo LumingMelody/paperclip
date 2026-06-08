@@ -12,6 +12,7 @@ import { topSkusDescriptor } from "./tools/lingxing/topSkus.js";
 import { returnReasonsDescriptor } from "./tools/dws/returnReasons.js";
 import { returnRateByStyleDescriptor } from "./tools/dws/returnRateByStyle.js";
 import { amazonSalesByStyleDescriptor } from "./tools/dws/amazonSalesByStyle.js";
+import { salesSummaryDescriptor } from "./tools/dws/salesSummary.js";
 import { siteTopStylesDescriptor } from "./tools/dws/siteTopStyles.js";
 import { siteReturnRateByStyleDescriptor } from "./tools/dws/siteReturnRateByStyle.js";
 import { siteReturnTimingByStyleDescriptor } from "./tools/dws/siteReturnTimingByStyle.js";
@@ -64,6 +65,7 @@ export const tools: ToolDescriptor[] = [
   returnReasonsDescriptor,
   returnRateByStyleDescriptor,
   amazonSalesByStyleDescriptor,
+  salesSummaryDescriptor,
   siteTopStylesDescriptor,
   siteReturnRateByStyleDescriptor,
   siteReturnTimingByStyleDescriptor,

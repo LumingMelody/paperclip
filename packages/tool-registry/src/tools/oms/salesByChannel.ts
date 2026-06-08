@@ -43,7 +43,8 @@ export const salesByChannelDescriptor: ToolDescriptor<OmsSalesByChannelInput, Om
     "Groups by sales_channel (Amazon.com / Amazon.de / Amazon.co.uk / Shopify / SHEIN / TikTok / etc.) " +
     "and currency, returning order count, GMV, shipping and discount totals over an order_date range. " +
     "Source: internal OMS MySQL — covers ALL channels including B2B Shopify draft orders, " +
-    "complementing Lingxing (which only has Amazon ledger view).",
+    "complementing Lingxing (which only has Amazon ledger view). " +
+    "For canonical company-wide GMV / 订单数 / 销量 totals, use dws.salesSummary instead.",
   readOnly: true,
   inputSchema,
   outputSchema,

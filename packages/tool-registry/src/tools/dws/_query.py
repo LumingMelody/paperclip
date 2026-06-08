@@ -287,6 +287,78 @@ def amazon_sales_by_style(
     return {"rows": rows, **metadata}
 
 
+def sales_summary(
+    conn,
+    since: str,
+    until: str | None,
+    group_by: str,
+    platform: str | None,
+    top: int | None,
+) -> dict[str, Any]:
+    group_exprs = {
+        "platform": "order_plat",
+        "account": "Account",
+        "bu": "performance_fir",
+        "country": "countryName",
+        "day": "DATE(statistic_time_local)",
+        "month": "DATE_FORMAT(statistic_time_local,'%%Y-%%m')",
+        "none": "'ALL'",
+    }
+    if group_by not in group_exprs:
+        emit(
+            {
+                "error": "ValidationError",
+                "message": "groupBy must be platform/account/bu/country/day/month/none",
+            },
+            1,
+        )
+    group_expr = group_exprs[group_by]
+    sql = f"""
+        SELECT
+            {group_expr} AS groupKey,
+            ROUND(COALESCE(SUM(CASE WHEN is_allcard=0 THEN actual_pay ELSE 0 END),0),4) AS gmv,
+            COALESCE(SUM(CASE WHEN is_allcard IN (0,1) AND original_sku NOT LIKE 'YS%%' THEN qty ELSE 0 END),0) AS units,
+            COUNT(DISTINCT order_id) AS orderCount
+        FROM dwa_od_order_d_v1
+        WHERE statistic_time_local >= %(since)s
+          AND original_sku <> ''
+    """
+    params: dict[str, Any] = {"since": since}
+    if until:
+        sql += " AND statistic_time_local < %(until)s"
+        params["until"] = until
+    if platform:
+        sql += " AND order_plat = %(platform)s"
+        params["platform"] = platform
+    if group_by != "none":
+        sql += f" GROUP BY {group_expr}"
+    if group_by in ("day", "month"):
+        sql += " ORDER BY groupKey ASC"
+    else:
+        sql += " ORDER BY gmv DESC"
+    if group_by not in ("none", "day", "month") and top is not None:
+        sql += " LIMIT %(top)s"
+        params["top"] = top
+    with conn.cursor() as cur:
+        cur.execute(sql, params)
+        rows = [serialize_row(r) for r in cur.fetchall()]
+
+    metadata_sql = """
+        SELECT
+            CURDATE() AS asOfDate,
+            %(since)s AS windowStart,
+            CAST(%(until)s AS DATE) AS windowEnd,
+            CASE
+                WHEN %(until)s IS NULL THEN NULL
+                ELSE CAST(DATE_SUB(CAST(%(until)s AS DATE), INTERVAL 1 DAY) AS DATE)
+            END AS coveredThrough
+    """
+    with conn.cursor() as cur:
+        cur.execute(metadata_sql, {"since": since, "until": until})
+        metadata = serialize_row(cur.fetchone())
+    return {"rows": rows, **metadata}
+
+
 def cohort_metadata(conn, since: str, until: str | None, maturity_days: int) -> tuple[str, dict[str, Any]]:
     effective_until = "%(until)s" if until else "DATE_SUB(CURDATE(), INTERVAL %(maturity_days)s DAY)"
     params: dict[str, Any] = {"since": since, "maturity_days": maturity_days}
@@ -833,6 +905,16 @@ def main() -> None:
                 until=req.get("until"),
                 top=int(req.get("top", 20)),
                 style=req.get("style"),
+            )
+            emit(result)
+        elif op == "salesSummary":
+            result = sales_summary(
+                conn,
+                since=req["since"],
+                until=req.get("until"),
+                group_by=req.get("groupBy", "platform"),
+                platform=req.get("platform"),
+                top=int(req["top"]) if req.get("top") is not None else None,
             )
             emit(result)
         elif op == "siteTopStyles":
