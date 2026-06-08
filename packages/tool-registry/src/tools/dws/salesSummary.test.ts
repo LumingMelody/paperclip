@@ -46,13 +46,15 @@ describe("dws.salesSummary", () => {
 
   it("queries canonical company-wide sales summary through the python helper and returns rows", async () => {
     const rows = [
-      { groupKey: "Amazon", gmv: 12345.6789, units: 321, orderCount: 250 },
-      { groupKey: "Shopify", gmv: 9876.5432, units: 210, orderCount: 175 },
+      { groupKey: "Amazon", currency: "USD", gmv: 12345.6789, units: 321, orderCount: 250 },
+      { groupKey: "Shopify", currency: "GBP", gmv: 9876.5432, units: 210, orderCount: 175 },
     ];
     mocks.runPythonHelper.mockResolvedValue({ version: "1", rows, ...metadata });
     const input = salesSummaryDescriptor.inputSchema.parse({ since: "2026-05-01" });
 
-    await expect(salesSummaryDescriptor.handler(ctx, input)).resolves.toEqual({ rows, ...metadata });
+    const output = await salesSummaryDescriptor.handler(ctx, input);
+    expect(output).toEqual({ rows, ...metadata });
+    expect(output.rows.map((row) => row.currency)).toEqual(["USD", "GBP"]);
 
     expect(mocks.loadCompanySecrets).toHaveBeenCalledWith("company-1", "dws");
     expect(mocks.runPythonHelper).toHaveBeenCalledWith(
@@ -81,7 +83,7 @@ describe("dws.salesSummary", () => {
   });
 
   it("forwards explicit until / groupBy / platform / top overrides to the helper", async () => {
-    const rows = [{ groupKey: "2026-05", gmv: 12345.6789, units: 321, orderCount: 250 }];
+    const rows = [{ groupKey: "2026-05", currency: "USD", gmv: 12345.6789, units: 321, orderCount: 250 }];
     mocks.runPythonHelper.mockResolvedValue({
       version: "1",
       rows,
@@ -122,7 +124,7 @@ describe("dws.salesSummary", () => {
   });
 
   it("forwards style and account filters with style grouping to the helper", async () => {
-    const rows = [{ groupKey: "EG02778", gmv: 1234.56, units: 42, orderCount: 35 }];
+    const rows = [{ groupKey: "EG02778", currency: "USD", gmv: 1234.56, units: 42, orderCount: 35 }];
     mocks.runPythonHelper.mockResolvedValue({
       version: "1",
       rows,

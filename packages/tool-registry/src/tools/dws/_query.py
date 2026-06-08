@@ -319,6 +319,7 @@ def sales_summary(
     sql = f"""
         SELECT
             {group_expr} AS groupKey,
+            currency AS currency,
             ROUND(COALESCE(SUM(CASE WHEN is_allcard=0 THEN actual_pay ELSE 0 END),0),4) AS gmv,
             COALESCE(SUM(CASE WHEN is_allcard IN (0,1) AND original_sku NOT LIKE 'YS%%' THEN qty ELSE 0 END),0) AS units,
             COUNT(DISTINCT order_id) AS orderCount
@@ -346,10 +347,9 @@ def sales_summary(
         # literal LIKE wildcard (no %% escaping needed for bound params).
         sql += " AND processed_sku LIKE %(style_prefix)s"
         params["style_prefix"] = style + "%"
-    if group_by != "none":
-        sql += f" GROUP BY {group_expr}"
+    sql += f" GROUP BY {group_expr}, currency"
     if group_by in ("day", "month"):
-        sql += " ORDER BY groupKey ASC"
+        sql += " ORDER BY groupKey ASC, currency ASC"
     else:
         sql += " ORDER BY gmv DESC"
     if group_by not in ("none", "day", "month") and top is not None:
