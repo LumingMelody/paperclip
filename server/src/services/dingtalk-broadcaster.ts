@@ -27,6 +27,7 @@ import { subscribeCompanyLiveEvents } from "./live-events.js";
 
 const REGISTRY_PATH = join(homedir(), ".paperclip", "dingtalk-channels.json");
 const TRANSLATE_CONFIG_PATH = join(homedir(), ".paperclip", "translate-config.json");
+const CONV_DENYLIST_PATH = join(homedir(), ".paperclip", "dingtalk-conv-denylist.json");
 const TOKEN_URL = "https://api.dingtalk.com/v1.0/oauth2/accessToken";
 const PUSH_URL = "https://api.dingtalk.com/v1.0/robot/groupMessages/send";
 const TOKEN_SAFETY_MARGIN_MS = 5 * 60 * 1000;
@@ -80,6 +81,28 @@ async function lookupChannelByAgent(
   return null;
 }
 
+let convDenylistCache: { value: Set<string>; loadedAt: number } | null = null;
+const CONV_DENYLIST_TTL_MS = 30_000;
+
+async function loadConversationDenylist(): Promise<Set<string>> {
+  const now = Date.now();
+  if (convDenylistCache && now - convDenylistCache.loadedAt < CONV_DENYLIST_TTL_MS) {
+    return convDenylistCache.value;
+  }
+  let value = new Set<string>();
+  try {
+    const raw = await fs.readFile(CONV_DENYLIST_PATH, "utf-8");
+    const parsed = JSON.parse(raw) as { denied?: unknown };
+    if (Array.isArray(parsed.denied)) {
+      value = new Set(parsed.denied.filter((id): id is string => typeof id === "string"));
+    }
+  } catch {
+    value = new Set<string>();
+  }
+  convDenylistCache = { value, loadedAt: now };
+  return value;
+}
+
 function labelForChannel(channelName: string): string {
   // concierge → Concierge, product_sizing → ProductSizing, cx_ops → CXOps, ...
   return channelName
@@ -118,6 +141,11 @@ async function pushMarkdown(entry: ChannelEntry, title: string, text: string): P
     log.debug(
       `skip push for agent=${entry.agent_id} — registry missing robot_code or conv_id (bot probably hasn't received first @-mention yet)`,
     );
+    return;
+  }
+  const deniedConversations = await loadConversationDenylist();
+  if (deniedConversations.has(entry.conv_id)) {
+    log.debug(`skip push for agent=${entry.agent_id} — conv_id=${entry.conv_id} is denylisted`);
     return;
   }
   const token = await getAccessToken(entry);
