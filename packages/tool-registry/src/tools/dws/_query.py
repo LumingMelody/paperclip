@@ -339,8 +339,13 @@ def sales_summary(
     if group_by == "style" or style is not None:
         sql += " AND processed_sku IS NOT NULL AND processed_sku <> ''"
     if style is not None:
-        sql += " AND LEFT(processed_sku,7) = %(style)s"
-        params["style"] = style
+        # Sargable prefix match (can use a processed_sku index) instead of
+        # LEFT(processed_sku,7)=style, which is non-sargable and forces a full
+        # scan of the window — fatal on the multi-platform wide table over a
+        # multi-week range. style is bound as a value, so its trailing % is a
+        # literal LIKE wildcard (no %% escaping needed for bound params).
+        sql += " AND processed_sku LIKE %(style_prefix)s"
+        params["style_prefix"] = style + "%"
     if group_by != "none":
         sql += f" GROUP BY {group_expr}"
     if group_by in ("day", "month"):
