@@ -293,6 +293,8 @@ def sales_summary(
     until: str | None,
     group_by: str,
     platform: str | None,
+    account: str | None,
+    style: str | None,
     top: int | None,
 ) -> dict[str, Any]:
     group_exprs = {
@@ -302,13 +304,14 @@ def sales_summary(
         "country": "countryName",
         "day": "DATE(statistic_time_local)",
         "month": "DATE_FORMAT(statistic_time_local,'%%Y-%%m')",
+        "style": "LEFT(processed_sku,7)",
         "none": "'ALL'",
     }
     if group_by not in group_exprs:
         emit(
             {
                 "error": "ValidationError",
-                "message": "groupBy must be platform/account/bu/country/day/month/none",
+                "message": "groupBy must be platform/account/bu/country/day/month/style/none",
             },
             1,
         )
@@ -330,6 +333,14 @@ def sales_summary(
     if platform:
         sql += " AND order_plat = %(platform)s"
         params["platform"] = platform
+    if account:
+        sql += " AND Account = %(account)s"
+        params["account"] = account
+    if group_by == "style" or style is not None:
+        sql += " AND processed_sku IS NOT NULL AND processed_sku <> ''"
+    if style is not None:
+        sql += " AND LEFT(processed_sku,7) = %(style)s"
+        params["style"] = style
     if group_by != "none":
         sql += f" GROUP BY {group_expr}"
     if group_by in ("day", "month"):
@@ -914,6 +925,8 @@ def main() -> None:
                 until=req.get("until"),
                 group_by=req.get("groupBy", "platform"),
                 platform=req.get("platform"),
+                account=req.get("account"),
+                style=req.get("style"),
                 top=int(req["top"]) if req.get("top") is not None else None,
             )
             emit(result)

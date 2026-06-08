@@ -65,6 +65,8 @@ describe("dws.salesSummary", () => {
           until: undefined,
           groupBy: "platform",
           platform: undefined,
+          account: undefined,
+          style: undefined,
           top: undefined,
         },
         envFromSecrets: {
@@ -111,7 +113,51 @@ describe("dws.salesSummary", () => {
           until: "2026-06-01",
           groupBy: "month",
           platform: "Amazon",
+          account: undefined,
+          style: undefined,
           top: 5,
+        },
+      }),
+    );
+  });
+
+  it("forwards style and account filters with style grouping to the helper", async () => {
+    const rows = [{ groupKey: "EG02778", gmv: 1234.56, units: 42, orderCount: 35 }];
+    mocks.runPythonHelper.mockResolvedValue({
+      version: "1",
+      rows,
+      ...metadata,
+      windowEnd: "2026-06-01",
+      coveredThrough: "2026-05-31",
+    });
+    const input = salesSummaryDescriptor.inputSchema.parse({
+      since: "2026-05-01",
+      until: "2026-06-01",
+      groupBy: "style",
+      account: "AmazonEPUS",
+      style: "EG02778",
+      top: 10,
+    });
+
+    await expect(salesSummaryDescriptor.handler(ctx, input)).resolves.toEqual({
+      rows,
+      ...metadata,
+      windowEnd: "2026-06-01",
+      coveredThrough: "2026-05-31",
+    });
+
+    expect(mocks.runPythonHelper).toHaveBeenCalledWith(
+      expect.objectContaining({
+        request: {
+          version: "1",
+          op: "salesSummary",
+          since: "2026-05-01",
+          until: "2026-06-01",
+          groupBy: "style",
+          platform: undefined,
+          account: "AmazonEPUS",
+          style: "EG02778",
+          top: 10,
         },
       }),
     );
@@ -126,7 +172,7 @@ describe("dws.salesSummary", () => {
   });
 
   it("rejects invalid groupBy and top values at input validation", () => {
-    expect(() => salesSummaryDescriptor.inputSchema.parse({ since: "2026-05-01", groupBy: "style" })).toThrow();
+    expect(() => salesSummaryDescriptor.inputSchema.parse({ since: "2026-05-01", groupBy: "sku" })).toThrow();
     expect(() => salesSummaryDescriptor.inputSchema.parse({ since: "2026-05-01", top: 0 })).toThrow();
     expect(() => salesSummaryDescriptor.inputSchema.parse({ since: "2026-05-01", top: 201 })).toThrow();
     expect(mocks.runPythonHelper).not.toHaveBeenCalled();
@@ -135,6 +181,7 @@ describe("dws.salesSummary", () => {
   it("accepts valid inputs with optional fields omitted and groupBy none", () => {
     expect(() => salesSummaryDescriptor.inputSchema.parse({ since: "2026-05-01" })).not.toThrow();
     expect(() => salesSummaryDescriptor.inputSchema.parse({ since: "2026-05-01", groupBy: "none" })).not.toThrow();
+    expect(() => salesSummaryDescriptor.inputSchema.parse({ since: "2026-05-01", groupBy: "style" })).not.toThrow();
   });
 
   it("validates the helper output shape", async () => {

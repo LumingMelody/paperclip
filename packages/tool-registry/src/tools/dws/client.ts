@@ -17,7 +17,16 @@ export type DwsQueryRequest =
       style?: string;
     }
   | { op: "amazonSalesByStyle"; account: string; since: string; until?: string; top?: number; style?: string }
-  | { op: "salesSummary"; since: string; until?: string; groupBy?: string; platform?: string; top?: number }
+  | {
+      op: "salesSummary";
+      since: string;
+      until?: string;
+      groupBy?: string;
+      platform?: string;
+      account?: string;
+      style?: string;
+      top?: number;
+    }
   | { op: "siteTopStyles"; account: string; since: string; top?: number; style?: string }
   | {
       op: "siteReturnRateByStyle";
