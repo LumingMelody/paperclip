@@ -196,7 +196,7 @@ via Concierge 派单 → Finance ✓ + ProductSizing ✓ + Supply ⚠️ (超时
 
 ### 退货率怎么算（重要）—— 一律走 DWS，不要用领星算率
 
-**退货率（退货量 / 销量）一律用 `dws.returnRateByStyle`**（来自 `dws_od_amazon_refund_rate_d`：`SUM(rf_quantity)/SUM(quantity)`，按款号 `sku_left7` 聚合）。它有 4 年历史、覆盖全部 Amazon 店铺，且实测比领星更贴权威口径（领星 `return_count/volume` 在近月偏低 ~5pp）。
+**退货率（退货量 / 销量）一律用 `dws.returnRateByStyle`**（来自 `dws_od_amazon_refund_rate_d`，`SUM(rf_quantity)/SUM(quantity)` 按款号 `sku_left7`、**按销售月 `yearmouth` 聚合**）。⚠️ **只算成熟销售月**（月末已过 `maturityDays`≈45 天的月份），因为该表是随订单"被退货检查"才入库的，近月不成熟会让分母虚小、率虚高（曾出 EG02778 6 月 67% 的假数）。所以**新款 / 近月会返回空 `rows` + `allImmature`/`matureThroughMonth` 元数据**——这时说「该款上市不足成熟期，暂无可信退货率」，**不要**硬报数字。实测与宽表 `refund_qty/qty` 对得上（EP09890 EP-US ≈65.6%）。
 
 ⚠️ **不要再用 `lingxing.styleSummary` / `lingxing.topSkus` / `lingxing.factSku` 去算退货率。** 领星这几个工具只用于 GMV / 销量 / 广告 / 变体明细 / 畅销榜 / 缺货，**不再承担退货率职责**。
 
@@ -205,7 +205,7 @@ via Concierge 派单 → Finance ✓ + ProductSizing ✓ + Supply ⚠️ (超时
 | 问题 | 调用 |
 |------|------|
 | 「哪个款退货率最高 / Top N 退货率」 | `dws.returnRateByStyle(shop, since)`（不传 style，返回按率降序 Top N，已用 `minQty`≈50 滤掉小样本噪声） |
-| 「EE02559 过去 30 天退货率」 | `dws.returnRateByStyle(shop, since, style="EE02559")`，用返回行的 `returnRate`；若 `salesQty=0` → `returnRate=null`，写「无销量分母」不要写 0% |
+| 「EE02559 退货率」 | `dws.returnRateByStyle(shop, since, style="EE02559")`，用返回行的 `returnRate`；**`rows` 为空（`allImmature` 或该款成熟月无销量）→ 说「该款上市不足/无成熟数据，暂无退货率」**；`salesQty=0` → `returnRate=null` 写「无销量分母」不写 0% |
 | 「EP-US Top 20 畅销款里退货率最高的几款」 | 先 `dws.salesSummary(account="AmazonEPUS", since=…, groupBy="style", top=20)` 拿畅销榜，再对榜里每个款用 `dws.returnRateByStyle(style=...)` 取率 |
 
 **ASIN 维度退货率**：`dws_od_amazon_refund_rate_d` 没有 asin 列。用户只给 ASIN（B0XXXXXXXX）又要退货率时，先把 ASIN 映射到款号再用 `dws.returnRateByStyle(style=...)`；映射不到才说明「该 ASIN 无法对应款号」。`lingxing.factSku` 只用于查 ASIN 的销量 / 评分 / 评论事实，**不用于算率**。
