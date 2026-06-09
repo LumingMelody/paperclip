@@ -26,9 +26,9 @@ const ctx = {
 
 const metadata = {
   asOfDate: "2026-06-02",
-  windowStart: "2026-01-01",
-  windowEnd: "2026-04-18",
-  coveredThrough: "2026-04-17",
+  windowStart: "2026-01",
+  windowEnd: "2026-05",
+  coveredThrough: "2026-04",
   maturityDays: 45,
   windowIncludesImmature: false,
 };
@@ -44,6 +44,12 @@ describe("dws.returnRateByStyle", () => {
       password: "dws_secret_pw",
       database: "dws_warehouse",
     });
+  });
+
+  it("documents sale-month cohorts without check_date wording", () => {
+    expect(returnRateByStyleDescriptor.description).toContain("sale-month cohort");
+    expect(returnRateByStyleDescriptor.description).toContain("dws_od_amazon_refund_rate_d.yearmouth");
+    expect(returnRateByStyleDescriptor.description).not.toContain("check_date");
   });
 
   it("queries DWS by shop/since through the python helper and returns the rows", async () => {
@@ -85,11 +91,11 @@ describe("dws.returnRateByStyle", () => {
   it("forwards explicit until / maturityDays / top / minQty / style overrides to the helper", async () => {
     const explicitMetadata = {
       ...metadata,
-      windowStart: "2025-12-31",
-      windowEnd: "2026-05-01",
-      coveredThrough: "2026-04-30",
+      windowStart: "2025-12",
+      windowEnd: "2026-05",
+      coveredThrough: "2026-04",
       maturityDays: 30,
-      windowIncludesImmature: true,
+      windowIncludesImmature: false,
     };
     mocks.runPythonHelper.mockResolvedValue({ version: "1", rows: [], ...explicitMetadata });
     const input = returnRateByStyleDescriptor.inputSchema.parse({
@@ -162,5 +168,27 @@ describe("dws.returnRateByStyle", () => {
     const input = returnRateByStyleDescriptor.inputSchema.parse({ shop: "EP-US", since: "2026-01-01" });
 
     await expect(returnRateByStyleDescriptor.handler(ctx, input)).rejects.toThrow();
+  });
+
+  it("accepts sale-month maturity metadata from the helper", async () => {
+    const helperOutput = {
+      rows: [],
+      ...metadata,
+      coveredThrough: null,
+      cohortBasis: "sale_month",
+      requestedStartMonth: "2026-06",
+      firstImmatureMonth: "2026-06",
+      matureThroughMonth: null,
+      allImmature: true,
+    };
+    mocks.runPythonHelper.mockResolvedValue({ version: "1", ...helperOutput });
+    const input = returnRateByStyleDescriptor.inputSchema.parse({
+      shop: "EP-US",
+      since: "2026-06-01",
+      until: "2026-07-01",
+      maturityDays: 45,
+    });
+
+    await expect(returnRateByStyleDescriptor.handler(ctx, input)).resolves.toEqual(helperOutput);
   });
 });

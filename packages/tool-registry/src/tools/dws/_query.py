@@ -175,34 +175,108 @@ def return_rate_by_style(
     maturity_days: int,
     style: str | None = None,
 ) -> dict[str, Any]:
-    effective_until = "%(until)s" if until else "DATE_SUB(CURDATE(), INTERVAL %(maturity_days)s DAY)"
-    sql = f"""
+    params: dict[str, Any] = {
+        "account_id": account_id,
+        "since": since,
+        "until": until,
+        "top": top,
+        "min_qty": min_qty,
+        "maturity_days": maturity_days,
+    }
+    metadata_sql = """
+        WITH bounds AS (
+            SELECT
+                CURDATE() AS asOfDate,
+                DATE_FORMAT(%(since)s, '%%Y-%%m') AS requestedStartMonth,
+                CASE
+                    WHEN %(until)s IS NULL THEN '9999-99'
+                    ELSE DATE_FORMAT(%(until)s, '%%Y-%%m')
+                END AS requestedEndExclusiveMonth,
+                DATE_FORMAT(
+                    DATE_ADD(DATE_SUB(CURDATE(), INTERVAL %(maturity_days)s DAY), INTERVAL 1 DAY),
+                    '%%Y-%%m'
+                ) AS firstImmatureMonth
+        ),
+        effective AS (
+            SELECT
+                asOfDate,
+                requestedStartMonth,
+                firstImmatureMonth,
+                LEAST(requestedEndExclusiveMonth, firstImmatureMonth) AS effectiveEndExclusiveMonth
+            FROM bounds
+        )
+        SELECT
+            asOfDate,
+            requestedStartMonth AS windowStart,
+            effectiveEndExclusiveMonth AS windowEnd,
+            CASE
+                WHEN effectiveEndExclusiveMonth <= requestedStartMonth THEN NULL
+                ELSE DATE_FORMAT(
+                    DATE_SUB(
+                        STR_TO_DATE(CONCAT(effectiveEndExclusiveMonth, '-01'), '%%Y-%%m-%%d'),
+                        INTERVAL 1 MONTH
+                    ),
+                    '%%Y-%%m'
+                )
+            END AS coveredThrough,
+            %(maturity_days)s AS maturityDays,
+            FALSE AS windowIncludesImmature,
+            'sale_month' AS cohortBasis,
+            requestedStartMonth,
+            firstImmatureMonth,
+            CASE
+                WHEN effectiveEndExclusiveMonth <= requestedStartMonth THEN NULL
+                ELSE DATE_FORMAT(
+                    DATE_SUB(
+                        STR_TO_DATE(CONCAT(effectiveEndExclusiveMonth, '-01'), '%%Y-%%m-%%d'),
+                        INTERVAL 1 MONTH
+                    ),
+                    '%%Y-%%m'
+                )
+            END AS matureThroughMonth,
+            CASE
+                WHEN effectiveEndExclusiveMonth <= requestedStartMonth THEN TRUE
+                ELSE FALSE
+            END AS allImmature
+        FROM effective
+    """
+    with conn.cursor() as cur:
+        cur.execute(metadata_sql, params)
+        metadata = serialize_row(cur.fetchone())
+    metadata["maturityDays"] = int(metadata["maturityDays"])
+    metadata["windowIncludesImmature"] = bool(metadata["windowIncludesImmature"])
+    metadata["allImmature"] = bool(metadata["allImmature"])
+    if metadata["allImmature"]:
+        return {"rows": [], **metadata}
+
+    sql = """
         SELECT
             sku_left7 AS styleCode,
             CAST(COALESCE(SUM(quantity),0) AS DECIMAL(20,0)) AS salesQty,
             CAST(COALESCE(SUM(rf_quantity),0) AS DECIMAL(20,0)) AS returnQty,
             COUNT(DISTINCT seller_sku) AS skuCount
         FROM dws_od_amazon_refund_rate_d
-        WHERE accountId=%(account_id)s AND check_date>=%(since)s
-              AND check_date < {effective_until}
-              AND sku_left7 IS NOT NULL AND sku_left7!=''
+        WHERE accountId=%(account_id)s
+          AND yearmouth >= DATE_FORMAT(%(since)s, '%%Y-%%m')
+          AND yearmouth < LEAST(
+              CASE
+                  WHEN %(until)s IS NULL THEN '9999-99'
+                  ELSE DATE_FORMAT(%(until)s, '%%Y-%%m')
+              END,
+              DATE_FORMAT(
+                  DATE_ADD(DATE_SUB(CURDATE(), INTERVAL %(maturity_days)s DAY), INTERVAL 1 DAY),
+                  '%%Y-%%m'
+              )
+          )
+          AND sku_left7 IS NOT NULL AND sku_left7<>''
     """
-    params: dict[str, Any] = {
-        "account_id": account_id,
-        "since": since,
-        "top": top,
-        "min_qty": min_qty,
-        "maturity_days": maturity_days,
-    }
-    if until:
-        params["until"] = until
     if style is not None:
         sql += " AND sku_left7 = %(style)s"
         params["style"] = style
     sql += " GROUP BY sku_left7"
     if style is None:
         sql += """
-            HAVING salesQty >= %(min_qty)s
+            HAVING SUM(quantity) >= %(min_qty)s
             ORDER BY (SUM(rf_quantity)/NULLIF(SUM(quantity),0)) DESC
             LIMIT %(top)s
         """
@@ -216,23 +290,6 @@ def return_rate_by_style(
         return_qty = float(row["returnQty"])
         row["returnRate"] = round(return_qty / sales_qty, 4) if sales_qty > 0 else None
         out.append(row)
-    metadata_sql = f"""
-        SELECT
-            CURDATE() AS asOfDate,
-            %(since)s AS windowStart,
-            CAST({effective_until} AS DATE) AS windowEnd,
-            CAST(DATE_SUB(CAST({effective_until} AS DATE), INTERVAL 1 DAY) AS DATE) AS coveredThrough,
-            %(maturity_days)s AS maturityDays,
-            CASE
-                WHEN {effective_until} > DATE_SUB(CURDATE(), INTERVAL %(maturity_days)s DAY) THEN TRUE
-                ELSE FALSE
-            END AS windowIncludesImmature
-    """
-    with conn.cursor() as cur:
-        cur.execute(metadata_sql, params)
-        metadata = serialize_row(cur.fetchone())
-    metadata["maturityDays"] = int(metadata["maturityDays"])
-    metadata["windowIncludesImmature"] = bool(metadata["windowIncludesImmature"])
     return {"rows": out, **metadata}
 
 

@@ -14,9 +14,9 @@ const inputSchema = z
       .string()
       .regex(DATE_RE, "until must be YYYY-MM-DD")
       .describe(
-        "Exclusive upper bound date (YYYY-MM-DD): matches check_date >= since AND check_date < until. " +
+        "Exclusive upper bound date (YYYY-MM-DD) rounded down to its sale month. " +
           "For a full calendar month use the first of the NEXT month, e.g. all of April 2026 = until 2026-05-01. " +
-          "Output coveredThrough echoes the inclusive last day (2026-04-30).",
+          "Maturity is still enforced, so recent sale months are excluded even when until is provided.",
       )
       .optional(),
     top: z.coerce.number().int().min(1).max(100).optional(),
@@ -39,9 +39,14 @@ const outputSchema = z.object({
   asOfDate: z.string(),
   windowStart: z.string(),
   windowEnd: z.string(),
-  coveredThrough: z.string(),
+  coveredThrough: z.string().nullable(),
   maturityDays: z.number(),
   windowIncludesImmature: z.boolean(),
+  cohortBasis: z.literal("sale_month").optional(),
+  requestedStartMonth: z.string().optional(),
+  firstImmatureMonth: z.string().optional(),
+  matureThroughMonth: z.string().nullable().optional(),
+  allImmature: z.boolean().optional(),
 });
 
 export type DwsReturnRateByStyleInput = z.infer<typeof inputSchema>;
@@ -72,14 +77,15 @@ export const returnRateByStyleDescriptor: ToolDescriptor<DwsReturnRateByStyleInp
   cliSubcommand: "return-rate-by-style",
   source: "dws",
   description:
-    "Amazon style-code (sku_left7) return rates for a shop over a closed-open order window: " +
-    "check_date >= since and check_date < until. Pass until for retrospective fixed-window " +
-    "reports such as one calendar month. If until is omitted, the tool defaults to mature " +
-    "cohorts only by ending the window at CURDATE() - maturityDays, with maturityDays defaulting " +
-    "to 45 because recent orders are right-censored and usually understate returns. Omit style " +
-    "to rank highest-return-rate styles after applying minQty to real salesQty inside the window; " +
-    "pass an exact style code to query one style without minQty/ranking. Rate = refunded units / " +
-    "ordered units. Source: single internal DW (Aliyun) table with 4yr history and broader store " +
+    "Amazon per-shop observed return rate by sale-month cohort for style code (sku_left7), using " +
+    "dws_od_amazon_refund_rate_d.yearmouth. The since date is rounded down to its sale month; " +
+    "until remains an exclusive upper bound rounded down to its sale month, and maturity is still " +
+    "enforced even when until is provided. The tool includes mature sale-months only, with " +
+    "maturityDays defaulting to 45 because recent cohorts are right-censored and usually " +
+    "understate returns. Rate = SUM(rf_quantity) / SUM(quantity). New or recent styles with no " +
+    "mature sale month return empty rows with allImmature=true. Omit style to rank highest-return-rate " +
+    "styles after applying minQty to salesQty; pass an exact style code to query one style without " +
+    "minQty/ranking. Source: single internal DW (Aliyun) table with 4yr history and broader store " +
     "coverage than Lingxing. Distinct from Lingxing return rate, which is per shop_name/SKU.",
   readOnly: true,
   inputSchema,
