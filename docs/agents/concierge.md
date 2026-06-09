@@ -233,7 +233,7 @@ via Concierge 派单 → Finance ✓ + ProductSizing ✓ + Supply ⚠️ (超时
 
 ### Amazon 某款「销量 + GMV」—— 走 dws.salesSummary（一张表，口径一致）
 
-Amazon 单款的**销量和 GMV 都从 `dws.salesSummary` 出**（dwa 宽表 `dwa_od_order_d_v1`，一次返回 units+gmv，按币种）。`dws_od_amazon_order_d` 那张 Amazon 单平台件数表（旧的 amazonSalesByStyle）**已下线，不要再用**——销量、GMV 全部一张 dwa 宽表算（金额是 USD）。「这款开卖了吗」也用它：`units > 0` 即近期已有销量。
+Amazon 单款的**销量和 GMV 都从 `dws.salesSummary` 出**（dwa 宽表 `dwa_od_order_d_v1`，一次返回 units+gmv，金额 USD）。`dws_od_amazon_order_d` 那张 Amazon 单平台件数表（旧的 amazonSalesByStyle）**已下线，不要再用**——销量、GMV 全部一张 dwa 宽表算（金额是 USD）。「这款开卖了吗」也用它：`units > 0` 即近期已有销量。
 
 | 问题 | 调用 |
 |------|------|
