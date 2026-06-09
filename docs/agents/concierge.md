@@ -227,13 +227,13 @@ via Concierge 派单 → Finance ✓ + ProductSizing ✓ + Supply ⚠️ (超时
 
 ⚠️ **退款率有两个不同口径，别混**：salesSummary 的 `refundRate` 是**订单级·全平台·宽表**（有退货记录的订单占比，§8 口径）；`dws.returnRateByStyle` 是**件数级·Amazon 单平台·按款·带成熟度窗口**（rf_qty/qty）。问「某款退货率」用 `returnRateByStyle`；问「公司/平台整体订单退款比例」用 `salesSummary` 的 `refundRate`。
 
-⚠️ **金额按币种分行返回**（每行带 `currency`：USD/GBP/EUR/CNY…）—— **绝不要把不同币种的 `gmv` / `refundAmount` / `netSales` 直接相加**。要公司总额就按币种各报一行，或估算换算（约 1.27 USD/GBP、1.08 USD/EUR）后标「约」。`units`/`orderCount` 可以跨币种相加；`refundRate` 是比率、按币种各看。
+⚠️ **金额单位是 USD**（`gmv`/`refundAmount`/`netSales`）—— 宽表 `actual_pay` 已由仓库**统一折算成 USD**；源表 `currency` 列只是渠道名义标签、**不可信**（shein 标 CNY 实为美元量级），已忽略。直接报**一个 USD 数**即可，不要分币种、不要再做汇率换算。
 
 ⚠️ **单款 GMV 也走这里**（传 `style="款号"`）—— `dwa_od_order_d_v1` 有 processed_sku，能直接算出某款金额，**不要因为是单款就退回 lingxing**（领星对新款有 2–7 天入库滞后，常返回 NotFound）。lingxing 只留给 **ASIN 级 评分 / 评论 / 广告** 和带广告口径的畅销榜（`lingxing.topSkus` / `lingxing.factSku` / `lingxing.styleSummary`）；**Amazon 单款的销量+GMV 也走 `dws.salesSummary`**（一张表同时出 units+gmv，口径一致）；**独立站单款件数** 走 `dws.siteTopStyles`。`oms.salesByChannel` 仅在需要 OMS 内部渠道视角时用，公司级总额以 `dws.salesSummary` 为准。
 
 ### Amazon 某款「销量 + GMV」—— 走 dws.salesSummary（一张表，口径一致）
 
-Amazon 单款的**销量和 GMV 都从 `dws.salesSummary` 出**（dwa 宽表 `dwa_od_order_d_v1`，一次返回 units+gmv，按币种）。`dws_od_amazon_order_d` 那张 Amazon 单平台件数表（旧的 amazonSalesByStyle）**已下线，不要再用**——销量、GMV 全部一张 dwa 宽表算。「这款开卖了吗」也用它：`units > 0` 即近期已有销量。
+Amazon 单款的**销量和 GMV 都从 `dws.salesSummary` 出**（dwa 宽表 `dwa_od_order_d_v1`，一次返回 units+gmv，按币种）。`dws_od_amazon_order_d` 那张 Amazon 单平台件数表（旧的 amazonSalesByStyle）**已下线，不要再用**——销量、GMV 全部一张 dwa 宽表算（金额是 USD）。「这款开卖了吗」也用它：`units > 0` 即近期已有销量。
 
 | 问题 | 调用 |
 |------|------|
@@ -310,9 +310,9 @@ Amazon 单款的**销量和 GMV 都从 `dws.salesSummary` 出**（dwa 宽表 `dw
 
 ## 跨渠道 / 全渠道 GMV 专题
 
-- **首选 `dws.salesSummary(groupBy="platform")`** —— 四平台(Amazon/Shopify/Shein/易仓)统一口径的跨平台 GMV/订单/销量，**按币种分行**。这是公司级总额的权威来源。
+- **首选 `dws.salesSummary(groupBy="platform")`** —— 四平台(Amazon/Shopify/Shein/易仓)统一口径的跨平台 GMV/订单/销量，**金额已是 USD、直接一个数**。这是公司级总额的权威来源。
 - `oms.salesByChannel` **只在需要宽表覆盖不到的渠道（如 TikTok）或 OMS `sales_channel × currency` 明细视角时**用；`salesChannel="(unknown)"` 行是独立站+易仓。
-- 多币种（两个工具都一样）：**不要直接相加** USD/GBP/EUR/CNY，按币种分行；要换算可估 1.27 USD/GBP / 1.08 USD/EUR + 标「约」。
+- ⚠️ 多币种只在 `oms.salesByChannel` 里有（OMS 原始多币种、按 currency 分组）——**那个**才别直接相加 USD/GBP/EUR，可估 1.27 USD/GBP / 1.08 USD/EUR + 标「约」。`dws.salesSummary` 已是 USD 单一口径，不存在这问题。
 
 ## B2B / 经销商专题
 

@@ -48,7 +48,6 @@ describe("dws.salesSummary", () => {
     const rows = [
       {
         groupKey: "Amazon",
-        currency: "USD",
         gmv: 12345.6789,
         units: 321,
         orderCount: 250,
@@ -58,7 +57,6 @@ describe("dws.salesSummary", () => {
       },
       {
         groupKey: "Shopify",
-        currency: "GBP",
         gmv: 9876.5432,
         units: 210,
         orderCount: 175,
@@ -72,7 +70,6 @@ describe("dws.salesSummary", () => {
 
     const output = await salesSummaryDescriptor.handler(ctx, input);
     expect(output).toEqual({ rows, ...metadata });
-    expect(output.rows.map((row) => row.currency)).toEqual(["USD", "GBP"]);
 
     expect(mocks.loadCompanySecrets).toHaveBeenCalledWith("company-1", "dws");
     expect(mocks.runPythonHelper).toHaveBeenCalledWith(
@@ -104,7 +101,6 @@ describe("dws.salesSummary", () => {
     const rows = [
       {
         groupKey: "2026-05",
-        currency: "USD",
         gmv: 12345.6789,
         units: 321,
         orderCount: 250,
@@ -156,7 +152,6 @@ describe("dws.salesSummary", () => {
     const rows = [
       {
         groupKey: "EG02778",
-        currency: "USD",
         gmv: 1234.56,
         units: 42,
         orderCount: 35,

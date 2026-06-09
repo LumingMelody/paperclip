@@ -35,7 +35,6 @@ const inputSchema = z
 
 const rowSchema = z.object({
   groupKey: z.string().nullable(),
-  currency: z.string().nullable(),
   gmv: z.number(),
   units: z.number(),
   orderCount: z.number(),
@@ -82,11 +81,9 @@ export const salesSummaryDescriptor: ToolDescriptor<DwsSalesSummaryInput, DwsSal
   description:
     "THE canonical company-wide 销售额/GMV, 订单数, 销量(units) across ALL platforms (Amazon+Shopify+Shein+易仓), " +
     "from the unified order wide table dwa_od_order_d_v1. Prefer this for any general sales / GMV / order / unit-volume question. " +
-    "GMV is PER-CURRENCY: every row carries currency, and you must NEVER sum gmv across rows with different currency values. " +
+    "Amounts (gmv/refundAmount/netSales) are USD: actual_pay is warehouse-normalized to USD; the source currency column is an unreliable marketplace label and is intentionally ignored. " +
     "Also returns 退款金额(refundAmount), 订单退款率(refundRate), and 净销售额(netSales) per dwa_od_order_d §8: " +
-    "refundRate is ORDER-level distinct refunded orders / distinct orders; netSales = GMV - refundAmount within the same window+currency cohort. " +
-    "refundAmount/netSales are PER-CURRENCY and must not be summed across rows with different currency values. " +
-    "units/orderCount may be summed across currencies. " +
+    "refundRate is ORDER-level distinct refunded orders / distinct orders; netSales = GMV - refundAmount within the same window. " +
     "Also use it for single-style / per-SKU-family GMV from this canonical wide table: pass style='EG02778' for one style's " +
     "GMV/units/orders, and account='AmazonEPUS' to scope to one shop. " +
     "GMV excludes gift cards (is_allcard=0); units exclude YS% insurance SKUs; one order_id spans multiple rows so orders use " +
