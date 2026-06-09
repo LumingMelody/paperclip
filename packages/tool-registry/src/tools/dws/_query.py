@@ -4,7 +4,6 @@ from __future__ import annotations
 import json
 import os
 import sys
-import time
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
@@ -62,6 +61,7 @@ def connect():
         database=os.environ["DWS_DB_DATABASE"],
         charset="utf8mb4",
         connect_timeout=8,
+        read_timeout=20,
         cursorclass=DictCursor,
     )
 
@@ -368,7 +368,7 @@ def sales_summary(
         with conn.cursor() as cur:
             cur.execute(
                 """
-                    SELECT COUNT(*) AS c
+                    SELECT /*+ MAX_EXECUTION_TIME(3000) */ COUNT(*) AS c
                     FROM dwa_od_order_d_v1
                     WHERE statistic_time_local >= DATE_SUB(CURDATE(), INTERVAL 3 DAY)
                 """
@@ -376,14 +376,20 @@ def sales_summary(
             row = cur.fetchone()
         return bool(row and int(row.get("c") or 0) > 0)
 
-    rows = run_main_query()
-    if not rows and not has_recent_wide_table_rows():
-        for _ in range(2):
-            time.sleep(3)
-            rows = run_main_query()
-            if rows:
-                break
-        if not rows and not has_recent_wide_table_rows():
+    main_error: Exception | None = None
+    try:
+        rows = run_main_query()
+    except Exception as exc:
+        main_error = exc
+        rows = []
+
+    if not rows:
+        try:
+            has_recent_rows = has_recent_wide_table_rows()
+        except Exception:
+            has_recent_rows = False
+
+        if not has_recent_rows:
             emit(
                 {
                     "error": "UpstreamError",
@@ -391,6 +397,8 @@ def sales_summary(
                 },
                 2,
             )
+        if main_error is not None:
+            raise main_error
 
     metadata_sql = """
         SELECT
