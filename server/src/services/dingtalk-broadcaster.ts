@@ -410,6 +410,36 @@ export async function broadcastIssueDone(
   }
 }
 
+/**
+ * A top-level DingTalk Concierge issue already timed out and was marked done,
+ * but the assigned agent later posted the real answer. Unlike the regular
+ * issue broadcasts, this is intentionally allowed for the Concierge channel:
+ * the bot poller has already stopped after seeing the timeout fallback.
+ */
+export async function broadcastLateAnswer(
+  issue: BroadcastIssue,
+  comment: { id: string; body: string | null; authorAgentId: string | null },
+): Promise<void> {
+  try {
+    if (!issue.assigneeAgentId) return;
+    if (!comment.body || comment.body.trim().length === 0) return;
+    if (comment.authorAgentId !== issue.assigneeAgentId) return;
+    const match = await lookupChannelByAgent(issue.assigneeAgentId);
+    if (!match) return;
+
+    const title = "📬 完整答案（补发）";
+    const text = [
+      abbreviate(comment.body, 800),
+      "",
+      `_issue: \`${issue.id}\`_`,
+    ].join("\n");
+    await pushMarkdown(match.entry, title, text);
+    log.info(`pushed late answer card → agent=${issue.assigneeAgentId} issue=${issue.id} comment=${comment.id}`);
+  } catch (err) {
+    log.warn(`broadcastLateAnswer failed (issue=${issue.id}, comment=${comment.id}):`, err);
+  }
+}
+
 // ─── Narration stream subscription ──────────────────────────────────────
 //
 // Subscribes to `heartbeat.run.log` live events (one per Claude SDK stdout

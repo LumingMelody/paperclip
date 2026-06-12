@@ -37,10 +37,12 @@ import {
 import { trackAgentTaskCompleted } from "@paperclipai/shared/telemetry";
 import { getTelemetryClient } from "../telemetry.js";
 import {
+  broadcastLateAnswer,
   broadcastIssueAssigned,
   broadcastIssueDone,
   broadcastIssueProgress,
 } from "../services/dingtalk-broadcaster.js";
+import { CONCIERGE_ANSWER_TIMEOUT_FALLBACK_MARKER } from "../services/concierge-answer-timeout.js";
 import type { StorageService } from "../storage/types.js";
 import { validate } from "../middleware/validate.js";
 import * as serviceIndex from "../services/index.js";
@@ -409,6 +411,77 @@ function shouldImplicitlyMoveCommentedIssueToTodo(input: {
   if (!isClosedIssueStatus(input.issueStatus) && input.issueStatus !== "blocked") return false;
   if (typeof input.assigneeAgentId !== "string" || input.assigneeAgentId.length === 0) return false;
   return true;
+}
+
+async function hasConciergeAnswerTimeoutFallbackAfterLatestUserComment(input: {
+  svc: ReturnType<typeof issueService>;
+  issueId: string;
+}) {
+  const comments = await input.svc.listComments(input.issueId, { order: "asc" }) as Array<{
+    authorUserId?: string | null;
+    body?: string | null;
+    createdAt?: Date | string | null;
+    createdByRunId?: string | null;
+  }>;
+  let latestUserCommentAt: Date | null = null;
+  for (const comment of comments) {
+    if (
+      typeof comment.authorUserId === "string" &&
+      comment.authorUserId.length > 0 &&
+      comment.authorUserId !== "system" &&
+      !comment.createdByRunId &&
+      comment.createdAt
+    ) {
+      latestUserCommentAt = comment.createdAt instanceof Date ? comment.createdAt : new Date(comment.createdAt);
+    }
+  }
+  if (!latestUserCommentAt) return false;
+  return comments.some((comment) => {
+    if (!comment.createdAt || !comment.body?.startsWith(CONCIERGE_ANSWER_TIMEOUT_FALLBACK_MARKER)) return false;
+    const createdAt = comment.createdAt instanceof Date ? comment.createdAt : new Date(comment.createdAt);
+    return createdAt.getTime() > latestUserCommentAt.getTime();
+  });
+}
+
+function queueLateDingTalkAnswerBroadcast(input: {
+  svc: ReturnType<typeof issueService>;
+  issue: {
+    id: string;
+    title: string | null;
+    parentId?: string | null;
+    assigneeAgentId?: string | null;
+    status?: string | null;
+    dingtalkConversationKey?: string | null;
+  };
+  comment: { id: string; body: string | null; authorAgentId: string | null };
+}) {
+  void (async () => {
+    const { issue, comment } = input;
+    if (!issue.dingtalkConversationKey) return;
+    if (issue.parentId) return;
+    if (issue.status !== "done") return;
+    if (!issue.assigneeAgentId) return;
+    if (comment.authorAgentId !== issue.assigneeAgentId) return;
+    const hasTimeoutFallback = await hasConciergeAnswerTimeoutFallbackAfterLatestUserComment({
+      svc: input.svc,
+      issueId: issue.id,
+    });
+    if (!hasTimeoutFallback) return;
+    await broadcastLateAnswer(
+      {
+        id: issue.id,
+        title: issue.title,
+        parentId: issue.parentId ?? null,
+        assigneeAgentId: issue.assigneeAgentId ?? null,
+        status: issue.status,
+      },
+      comment,
+    );
+  })().catch((err) =>
+    logger.warn(
+      { err, issueId: input.issue.id, commentId: input.comment.id },
+      "failed to broadcast late DingTalk answer",
+    ));
 }
 
 function isExplicitResumeCapableStatus(status: string | null | undefined) {
@@ -2723,6 +2796,15 @@ export function issueRoutes(
         userId: actor.actorType === "user" ? actor.actorId : undefined,
         runId: actor.runId,
       });
+      queueLateDingTalkAnswerBroadcast({
+        svc,
+        issue,
+        comment: {
+          id: comment.id,
+          body: comment.body ?? null,
+          authorAgentId: comment.authorAgentId ?? null,
+        },
+      });
       await issueReferencesSvc.syncComment(comment.id);
       const commentReferenceSummaryAfter = await issueReferencesSvc.listIssueReferenceSummary(issue.id);
       const commentReferenceDiff = issueReferencesSvc.diffIssueReferenceSummary(
@@ -3791,6 +3873,15 @@ export function issueRoutes(
       agentId: actor.agentId ?? undefined,
       userId: actor.actorType === "user" ? actor.actorId : undefined,
       runId: actor.runId,
+    });
+    queueLateDingTalkAnswerBroadcast({
+      svc,
+      issue: currentIssue,
+      comment: {
+        id: comment.id,
+        body: comment.body ?? null,
+        authorAgentId: comment.authorAgentId ?? null,
+      },
     });
     // Phase 6.1 — broadcast agent's progress comments to its bound DingTalk
     // group (throttled, skipped for Concierge / user-authored / non-assignee).

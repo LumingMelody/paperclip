@@ -34,6 +34,7 @@ import { instanceSettingsService } from "../instance-settings.js";
 import { issueTreeControlService } from "../issue-tree-control.js";
 import { issueService } from "../issues.js";
 import { getRunLogStore } from "../run-log-store.js";
+import { CONCIERGE_ANSWER_TIMEOUT_FALLBACK_MARKER } from "../concierge-answer-timeout.js";
 import {
   RECOVERY_ORIGIN_KINDS,
   buildIssueGraphLivenessLeafKey,
@@ -51,11 +52,12 @@ const UNSUCCESSFUL_HEARTBEAT_RUN_TERMINAL_STATUSES = ["failed", "cancelled", "ti
 export const ACTIVE_RUN_OUTPUT_SUSPICION_THRESHOLD_MS = 60 * 60 * 1000;
 export const ACTIVE_RUN_OUTPUT_CRITICAL_THRESHOLD_MS = 4 * 60 * 60 * 1000;
 export const ACTIVE_RUN_OUTPUT_CONTINUE_REARM_MS = 30 * 60 * 1000;
+export const CONCIERGE_ANSWER_TIMEOUT_ACTIVE_RUN_SILENCE_THRESHOLD_MS = 15 * 60 * 1000;
 const ACTIVE_RUN_OUTPUT_EVIDENCE_TAIL_BYTES = 8 * 1024;
 const STRANDED_ISSUE_RECOVERY_ORIGIN_KIND = RECOVERY_ORIGIN_KINDS.strandedIssueRecovery;
 const STALE_ACTIVE_RUN_EVALUATION_ORIGIN_KIND = RECOVERY_ORIGIN_KINDS.staleActiveRunEvaluation;
 const DEFERRED_WAKE_CONTEXT_KEY = "_paperclipWakeContext";
-export const CONCIERGE_ANSWER_TIMEOUT_FALLBACK_MARKER = "⏱ Concierge answer timeout fallback";
+export { CONCIERGE_ANSWER_TIMEOUT_FALLBACK_MARKER };
 // Author of the system fallback comment. It must be excluded from the inbound
 // user-comment anchor: otherwise posting a fallback moves the anchor forward,
 // which both breaks idempotency and makes the issue look freshly active.
@@ -124,6 +126,7 @@ export type ConciergeAnswerTimeoutReconcileResult = {
   timedOut: number;
   fallbackPosted: number;
   skippedIdempotent: number;
+  skippedActiveRun: number;
 };
 
 function readNonEmptyString(value: unknown): string | null {
@@ -1165,6 +1168,10 @@ export function recoveryService(db: Db, deps: { enqueueWakeup: RecoveryWakeup })
       .select({
         id: heartbeatRuns.id,
         status: heartbeatRuns.status,
+        lastOutputAt: heartbeatRuns.lastOutputAt,
+        processStartedAt: heartbeatRuns.processStartedAt,
+        startedAt: heartbeatRuns.startedAt,
+        createdAt: heartbeatRuns.createdAt,
       })
       .from(heartbeatRuns)
       .where(
@@ -1185,6 +1192,7 @@ export function recoveryService(db: Db, deps: { enqueueWakeup: RecoveryWakeup })
       timedOut: 0,
       fallbackPosted: 0,
       skippedIdempotent: 0,
+      skippedActiveRun: 0,
     };
     if (!input.conciergeAgentId || input.timeoutMs <= 0) return result;
 
@@ -1270,12 +1278,20 @@ export function recoveryService(db: Db, deps: { enqueueWakeup: RecoveryWakeup })
           issueId: current.id,
           conciergeAgentId: input.conciergeAgentId,
         });
-        const activeRunId =
+        const activeRun =
           latestRun && CONCIERGE_ANSWER_TIMEOUT_ACTIVE_RUN_STATUSES.includes(
             latestRun.status as (typeof CONCIERGE_ANSWER_TIMEOUT_ACTIVE_RUN_STATUSES)[number],
           )
-            ? latestRun.id
+            ? latestRun
             : null;
+        if (activeRun) {
+          const silenceStartedAt =
+            activeRun.lastOutputAt ?? activeRun.processStartedAt ?? activeRun.startedAt ?? activeRun.createdAt;
+          if (input.now.getTime() - silenceStartedAt.getTime() < CONCIERGE_ANSWER_TIMEOUT_ACTIVE_RUN_SILENCE_THRESHOLD_MS) {
+            return { kind: "active_run" as const };
+          }
+        }
+        const activeRunId = activeRun?.id ?? null;
 
         await tx.insert(issueComments).values({
           companyId: current.companyId,
@@ -1325,6 +1341,8 @@ export function recoveryService(db: Db, deps: { enqueueWakeup: RecoveryWakeup })
       } else if (outcome.kind === "idempotent") {
         result.timedOut += 1;
         result.skippedIdempotent += 1;
+      } else if (outcome.kind === "active_run") {
+        result.skippedActiveRun += 1;
       }
     }
 

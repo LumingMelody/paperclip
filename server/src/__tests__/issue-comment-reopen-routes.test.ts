@@ -1,12 +1,14 @@
 import express from "express";
 import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { CONCIERGE_ANSWER_TIMEOUT_FALLBACK_MARKER } from "../services/concierge-answer-timeout.js";
 
 const mockIssueService = vi.hoisted(() => ({
   getById: vi.fn(),
   assertCheckoutOwner: vi.fn(),
   update: vi.fn(),
   addComment: vi.fn(),
+  listComments: vi.fn(),
   getDependencyReadiness: vi.fn(),
   findMentionedAgents: vi.fn(),
   listWakeableBlockedDependents: vi.fn(),
@@ -65,10 +67,18 @@ const mockIssueThreadInteractionService = vi.hoisted(() => ({
 const mockIssueTreeControlService = vi.hoisted(() => ({
   getActivePauseHoldGate: vi.fn(async () => null),
 }));
+const mockBroadcastLateAnswer = vi.hoisted(() => vi.fn(async () => undefined));
 
 vi.mock("@paperclipai/shared/telemetry", () => ({
   trackAgentTaskCompleted: vi.fn(),
   trackErrorHandlerCrash: vi.fn(),
+}));
+
+vi.mock("../services/dingtalk-broadcaster.js", () => ({
+  broadcastIssueAssigned: vi.fn(async () => undefined),
+  broadcastIssueDone: vi.fn(async () => undefined),
+  broadcastIssueProgress: vi.fn(async () => undefined),
+  broadcastLateAnswer: mockBroadcastLateAnswer,
 }));
 
 vi.mock("../telemetry.js", () => ({
@@ -213,6 +223,7 @@ describe.sequential("issue comment reopen routes", () => {
     mockIssueService.assertCheckoutOwner.mockReset();
     mockIssueService.update.mockReset();
     mockIssueService.addComment.mockReset();
+    mockIssueService.listComments.mockReset();
     mockIssueService.getDependencyReadiness.mockReset();
     mockIssueService.findMentionedAgents.mockReset();
     mockIssueService.listWakeableBlockedDependents.mockReset();
@@ -234,6 +245,7 @@ describe.sequential("issue comment reopen routes", () => {
     mockInstanceSettingsService.listCompanyIds.mockReset();
     mockRoutineService.syncRunStatusForIssue.mockReset();
     mockIssueTreeControlService.getActivePauseHoldGate.mockReset();
+    mockBroadcastLateAnswer.mockReset();
     mockTxInsertValues.mockReset();
     mockTxInsert.mockReset();
     mockDb.transaction.mockReset();
@@ -262,6 +274,7 @@ describe.sequential("issue comment reopen routes", () => {
     mockInstanceSettingsService.listCompanyIds.mockResolvedValue(["company-1"]);
     mockRoutineService.syncRunStatusForIssue.mockResolvedValue(undefined);
     mockIssueTreeControlService.getActivePauseHoldGate.mockResolvedValue(null);
+    mockBroadcastLateAnswer.mockResolvedValue(undefined);
     mockIssueService.addComment.mockResolvedValue({
       id: "comment-1",
       issueId: "11111111-1111-4111-8111-111111111111",
@@ -272,6 +285,7 @@ describe.sequential("issue comment reopen routes", () => {
       authorAgentId: null,
       authorUserId: "local-board",
     });
+    mockIssueService.listComments.mockResolvedValue([]);
     mockIssueService.findMentionedAgents.mockResolvedValue([]);
     mockIssueService.getDependencyReadiness.mockResolvedValue({
       issueId: "11111111-1111-4111-8111-111111111111",
@@ -819,6 +833,107 @@ describe.sequential("issue comment reopen routes", () => {
     expect(res.status).toBe(201);
     expect(mockIssueService.update).not.toHaveBeenCalled();
     expect(mockHeartbeatService.wakeup).not.toHaveBeenCalled();
+  });
+
+  it("broadcasts a late DingTalk answer when an assignee agent comments after a timeout fallback", async () => {
+    const issue = {
+      ...makeIssue("done"),
+      parentId: null,
+      dingtalkConversationKey: "ding-conv-1",
+    };
+    const comment = {
+      id: "comment-late-answer",
+      issueId: issue.id,
+      companyId: issue.companyId,
+      body: "完整答案正文",
+      createdAt: new Date("2026-04-22T10:20:00.000Z"),
+      updatedAt: new Date("2026-04-22T10:20:00.000Z"),
+      authorAgentId: issue.assigneeAgentId,
+      authorUserId: null,
+    };
+    mockIssueService.getById.mockResolvedValue(issue);
+    mockIssueService.addComment.mockResolvedValue(comment);
+    mockIssueService.listComments.mockResolvedValue([
+      {
+        id: "comment-user",
+        body: "用户问题",
+        authorUserId: "ding-user",
+        authorAgentId: null,
+        createdByRunId: null,
+        createdAt: new Date("2026-04-22T10:00:00.000Z"),
+      },
+      {
+        id: "comment-fallback",
+        body: `${CONCIERGE_ANSWER_TIMEOUT_FALLBACK_MARKER}\n\nfallback`,
+        authorUserId: "system",
+        authorAgentId: null,
+        createdByRunId: null,
+        createdAt: new Date("2026-04-22T10:12:00.000Z"),
+      },
+      comment,
+    ]);
+
+    const res = await request(await installActor(createApp(), agentActor()))
+      .post("/api/issues/11111111-1111-4111-8111-111111111111/comments")
+      .send({ body: "完整答案正文" });
+
+    expect(res.status).toBe(201);
+    await vi.waitFor(() => expect(mockBroadcastLateAnswer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: issue.id,
+        parentId: null,
+        assigneeAgentId: issue.assigneeAgentId,
+        status: "done",
+      }),
+      expect.objectContaining({
+        id: comment.id,
+        body: comment.body,
+        authorAgentId: issue.assigneeAgentId,
+      }),
+    ));
+    expect(mockIssueService.update).not.toHaveBeenCalled();
+    expect(mockHeartbeatService.wakeup).not.toHaveBeenCalled();
+  });
+
+  it("does not broadcast a late DingTalk answer when the timeout fallback predates the latest user comment", async () => {
+    const issue = {
+      ...makeIssue("done"),
+      parentId: null,
+      dingtalkConversationKey: "ding-conv-1",
+    };
+    mockIssueService.getById.mockResolvedValue(issue);
+    mockIssueService.addComment.mockResolvedValue({
+      id: "comment-late-answer",
+      issueId: issue.id,
+      companyId: issue.companyId,
+      body: "完整答案正文",
+      createdAt: new Date("2026-04-22T10:20:00.000Z"),
+      updatedAt: new Date("2026-04-22T10:20:00.000Z"),
+      authorAgentId: issue.assigneeAgentId,
+      authorUserId: null,
+    });
+    mockIssueService.listComments.mockResolvedValue([
+      {
+        body: `${CONCIERGE_ANSWER_TIMEOUT_FALLBACK_MARKER}\n\nold fallback`,
+        authorUserId: "system",
+        createdByRunId: null,
+        createdAt: new Date("2026-04-22T10:00:00.000Z"),
+      },
+      {
+        body: "新的用户追问",
+        authorUserId: "ding-user",
+        createdByRunId: null,
+        createdAt: new Date("2026-04-22T10:10:00.000Z"),
+      },
+    ]);
+
+    const res = await request(await installActor(createApp(), agentActor()))
+      .post("/api/issues/11111111-1111-4111-8111-111111111111/comments")
+      .send({ body: "完整答案正文" });
+
+    expect(res.status).toBe(201);
+    await vi.waitFor(() => expect(mockIssueService.listComments).toHaveBeenCalled());
+    expect(mockBroadcastLateAnswer).not.toHaveBeenCalled();
   });
 
   it("explicit same-agent resume comments reopen closed issues and mark the wake payload", async () => {

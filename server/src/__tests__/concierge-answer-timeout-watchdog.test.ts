@@ -16,6 +16,7 @@ import {
   startEmbeddedPostgresTestDatabase,
 } from "./helpers/embedded-postgres.js";
 import {
+  CONCIERGE_ANSWER_TIMEOUT_ACTIVE_RUN_SILENCE_THRESHOLD_MS,
   CONCIERGE_ANSWER_TIMEOUT_FALLBACK_MARKER,
   recoveryService,
 } from "../services/recovery/service.ts";
@@ -152,8 +153,20 @@ describeEmbeddedPostgres("concierge answer-timeout watchdog", () => {
     issueId: string;
     status: string;
     at: Date;
+    createdAt?: Date;
+    startedAt?: Date | null;
+    processStartedAt?: Date | null;
+    lastOutputAt?: Date | null;
   }) {
     const runId = randomUUID();
+    const createdAt = input.createdAt ?? input.at;
+    const startedAt = input.startedAt === undefined ? input.at : input.startedAt;
+    const processStartedAt = input.processStartedAt === undefined
+      ? (input.status === "running" ? input.at : null)
+      : input.processStartedAt;
+    const lastOutputAt = input.lastOutputAt === undefined
+      ? (input.status === "running" ? input.at : null)
+      : input.lastOutputAt;
     await db.insert(heartbeatRuns).values({
       id: runId,
       companyId: input.companyId,
@@ -161,16 +174,16 @@ describeEmbeddedPostgres("concierge answer-timeout watchdog", () => {
       status: input.status,
       invocationSource: "assignment",
       triggerDetail: "system",
-      startedAt: input.at,
+      startedAt,
       finishedAt: ["succeeded", "failed", "cancelled", "timed_out"].includes(input.status) ? input.at : null,
-      processStartedAt: input.status === "running" ? input.at : null,
-      lastOutputAt: input.status === "running" ? input.at : null,
-      lastOutputSeq: input.status === "running" ? 25 : 0,
-      lastOutputStream: input.status === "running" ? "stdout" : null,
+      processStartedAt,
+      lastOutputAt,
+      lastOutputSeq: lastOutputAt ? 25 : 0,
+      lastOutputStream: lastOutputAt ? "stdout" : null,
       contextSnapshot: { issueId: input.issueId },
       stdoutExcerpt: "raw run output should not be copied into fallback comment",
       logBytes: 0,
-      createdAt: input.at,
+      createdAt,
       updatedAt: input.at,
     });
     return runId;
@@ -192,7 +205,7 @@ describeEmbeddedPostgres("concierge answer-timeout watchdog", () => {
       );
   }
 
-  it("posts a fallback and marks done when a running Concierge run keeps outputting but the issue answer is overdue", async () => {
+  it("skips an overdue issue when the latest active Concierge run has recent output", async () => {
     const now = new Date("2026-04-22T20:00:00.000Z");
     const seeded = await seedCompany();
     const issueId = await seedIssue({
@@ -217,9 +230,55 @@ describeEmbeddedPostgres("concierge answer-timeout watchdog", () => {
 
     expect(result).toMatchObject({
       candidates: 1,
+      timedOut: 0,
+      fallbackPosted: 0,
+      skippedIdempotent: 0,
+      skippedActiveRun: 1,
+    });
+
+    const [issue] = await db.select().from(issues).where(eq(issues.id, issueId));
+    expect(issue?.status).toBe("in_progress");
+    expect(issue?.completedAt).toBeNull();
+
+    expect(await fallbackComments(issueId)).toHaveLength(0);
+    const activities = await db
+      .select()
+      .from(activityLog)
+      .where(and(eq(activityLog.entityId, issueId), eq(activityLog.action, "concierge.answer_timeout_fallback_posted")));
+    expect(activities).toHaveLength(0);
+  });
+
+  it("posts a fallback when the latest active Concierge run has been silent for at least fifteen minutes", async () => {
+    const now = new Date("2026-04-22T20:00:00.000Z");
+    const seeded = await seedCompany();
+    const issueId = await seedIssue({
+      ...seeded,
+      assigneeAgentId: seeded.conciergeAgentId,
+      status: "in_progress",
+      inboundCommentAt: new Date(now.getTime() - 1_800_000),
+    });
+    const silentSince = new Date(now.getTime() - CONCIERGE_ANSWER_TIMEOUT_ACTIVE_RUN_SILENCE_THRESHOLD_MS);
+    const runId = await seedRun({
+      companyId: seeded.companyId,
+      agentId: seeded.conciergeAgentId,
+      issueId,
+      status: "running",
+      at: silentSince,
+      lastOutputAt: silentSince,
+    });
+
+    const result = await svc().reconcileConciergeAnswerTimeout({
+      now,
+      conciergeAgentId: seeded.conciergeAgentId,
+      timeoutMs: 600_000,
+    });
+
+    expect(result).toMatchObject({
+      candidates: 1,
       timedOut: 1,
       fallbackPosted: 1,
       skippedIdempotent: 0,
+      skippedActiveRun: 0,
     });
 
     const [issue] = await db.select().from(issues).where(eq(issues.id, issueId));
@@ -246,6 +305,33 @@ describeEmbeddedPostgres("concierge answer-timeout watchdog", () => {
       latestRunStatus: "running",
       timeoutMs: 600_000,
     });
+  });
+
+  it("posts a fallback when no Concierge run is associated with the overdue issue", async () => {
+    const now = new Date("2026-04-22T20:00:00.000Z");
+    const seeded = await seedCompany();
+    const issueId = await seedIssue({
+      ...seeded,
+      assigneeAgentId: seeded.conciergeAgentId,
+      status: "in_progress",
+      inboundCommentAt: new Date(now.getTime() - 700_000),
+    });
+
+    const result = await svc().reconcileConciergeAnswerTimeout({
+      now,
+      conciergeAgentId: seeded.conciergeAgentId,
+      timeoutMs: 600_000,
+    });
+
+    expect(result).toMatchObject({
+      candidates: 1,
+      timedOut: 1,
+      fallbackPosted: 1,
+      skippedActiveRun: 0,
+    });
+    const [issue] = await db.select().from(issues).where(eq(issues.id, issueId));
+    expect(issue?.status).toBe("done");
+    expect(await fallbackComments(issueId)).toHaveLength(1);
   });
 
   it("posts a fallback for blocked Concierge issues even when the latest associated run is terminal", async () => {
