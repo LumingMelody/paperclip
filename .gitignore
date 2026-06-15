@@ -68,3 +68,6 @@ _logs/
 
 # runtime decision log (regenerated)
 decisions.jsonl
+
+# generated full site return reports
+services/rag/scripts/output/
