@@ -235,6 +235,27 @@ via Concierge 派单 → Finance ✓ + ProductSizing ✓ + Supply ⚠️ (超时
 
 ⚠️ **单款 GMV 也走这里**（传 `style="款号"`）—— `dwa_od_order_d_v1` 有 processed_sku，能直接算出某款金额，**不要因为是单款就退回 lingxing**（领星对新款有 2–7 天入库滞后，常返回 NotFound）。lingxing 只留给 **ASIN 级 评分 / 评论 / 广告** 和带广告口径的畅销榜（`lingxing.topSkus` / `lingxing.factSku` / `lingxing.styleSummary`）；**Amazon 单款的销量+GMV 也走 `dws.salesSummary`**（一张表同时出 units+gmv，口径一致）；**独立站单款件数** 走 `dws.siteTopStyles`。`oms.salesByChannel` 仅在需要 OMS 内部渠道视角时用，公司级总额以 `dws.salesSummary` 为准。
 
+### BU 口径（performance_fir 真实映射 —— ⚠️ 禁止自创品牌分组）
+
+「BU / 事业部 / 组织归属」= 宽表字段 `performance_fir`，来源是店铺主数据 `ods_sp_me_platform_account_m.financePlatform`。**BU 是组织/财务归属，不是平台、也不是品牌。** 同一个 BU 可以跨平台，一个品牌(EP)的店会分散在多个 BU。要按 BU 出数一律 `dws.salesSummary(groupBy="bu")`（宽表 performance_fir，已对齐下表）。
+
+**真实映射（2026-06-15 快照，权威来源 `ods_sp_me_platform_account_m`；要核对某店当前归属就查这张表 userAccount→financePlatform）：**
+
+| BU | 平台/性质 | 主要店铺 |
+|----|----------|----------|
+| **BU1** | **独立站(Shopify) 美国系** | EPSITEUS、EPSITEUSN、EPSITEPlus、Belk、Kohls、Macys |
+| **BU2** | **Amazon 美洲 + Walmart** | AmazonEPUS、AmazonDAMAUS、AmazonPZUS、AmazonEP/DAMA-CA/MX、AmazonEYUS、AmazonASUS、Walmart_US |
+| **BU4** | **SHEIN + 部分渠道** | Shein_*、EPSITEE4、EPSITEEF、lanting、Target、Faire |
+| **BU5** | **Amazon 欧洲/日本** | AmazonEP-UK/DE/FR/IT/ES/JP/NL、AmazonPZ-UK/DE/FR/IT/ES/NL |
+| **BU6** | **独立站(Shopify) 欧洲/亚太** | EPSITE-UK/DE/FR/IT/ES/EU/AU/AP |
+
+⚠️ **绝不要自创「EP品牌=BU1 / DAMA+PZ=BU2」这种按品牌×Amazon 的分组**——那是错的，和数仓 `performance_fir` 对不上。具体红线：
+- `AmazonEPUS` 是 **BU2**（不是 BU1）；`AmazonEPUK/DE/FR/IT/ES` 是 **BU5**（不是 BU1）。
+- BU1 里**一个 Amazon 店都没有**，它是美国独立站 + 美国 marketplace(Belk/Kohls/Macys)。
+- `financePlatform=NULL` 的店（ebay/wish/shopee/aliexpress/AmazonEPAU·EPSE·ASJP 等）数仓**未分配 BU**，不要硬塞进任何 BU。
+
+⚠️ **BU 级退货率不要把独立站和 Amazon 的率混进一个数**：BU1/BU6 是独立站，按款率走 `dws.siteReturnRateBy*`（pay_time 成熟口径）；BU2/BU5 是 Amazon，按款率走 `dws.returnRateByStyle`（yearmouth 销售月成熟口径），整体订单退款率走 `dws.salesSummary` 的 `refundRate`。两条口径不同，跨 BU 汇总要分别加权、注明口径。
+
 ### Amazon 某款「销量 + GMV」—— 走 dws.salesSummary（一张表，口径一致）
 
 Amazon 单款的**销量和 GMV 都从 `dws.salesSummary` 出**（dwa 宽表 `dwa_od_order_d_v1`，一次返回 units+gmv，金额 USD）。`dws_od_amazon_order_d` 那张 Amazon 单平台件数表（旧的 amazonSalesByStyle）**已下线，不要再用**——销量、GMV 全部一张 dwa 宽表算（金额是 USD）。「这款开卖了吗」也用它：`units > 0` 即近期已有销量。
