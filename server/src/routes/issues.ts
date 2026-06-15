@@ -42,7 +42,10 @@ import {
   broadcastIssueDone,
   broadcastIssueProgress,
 } from "../services/dingtalk-broadcaster.js";
-import { CONCIERGE_ANSWER_TIMEOUT_FALLBACK_MARKER } from "../services/concierge-answer-timeout.js";
+import {
+  CONCIERGE_ANSWER_TIMEOUT_FALLBACK_MARKER,
+  CONCIERGE_LATE_ANSWER_DELIVERY_THRESHOLD_MS,
+} from "../services/concierge-answer-timeout.js";
 import type { StorageService } from "../storage/types.js";
 import { validate } from "../middleware/validate.js";
 import * as serviceIndex from "../services/index.js";
@@ -413,9 +416,10 @@ function shouldImplicitlyMoveCommentedIssueToTodo(input: {
   return true;
 }
 
-async function hasConciergeAnswerTimeoutFallbackAfterLatestUserComment(input: {
+async function shouldBroadcastLateConciergeAnswer(input: {
   svc: ReturnType<typeof issueService>;
   issueId: string;
+  now: Date;
 }) {
   const comments = await input.svc.listComments(input.issueId, { order: "asc" }) as Array<{
     authorUserId?: string | null;
@@ -436,11 +440,15 @@ async function hasConciergeAnswerTimeoutFallbackAfterLatestUserComment(input: {
     }
   }
   if (!latestUserCommentAt) return false;
-  return comments.some((comment) => {
+  const hasTimeoutFallbackAfterLatestUserComment = comments.some((comment) => {
     if (!comment.createdAt || !comment.body?.startsWith(CONCIERGE_ANSWER_TIMEOUT_FALLBACK_MARKER)) return false;
     const createdAt = comment.createdAt instanceof Date ? comment.createdAt : new Date(comment.createdAt);
     return createdAt.getTime() > latestUserCommentAt.getTime();
   });
+  return (
+    hasTimeoutFallbackAfterLatestUserComment ||
+    input.now.getTime() - latestUserCommentAt.getTime() >= CONCIERGE_LATE_ANSWER_DELIVERY_THRESHOLD_MS
+  );
 }
 
 function queueLateDingTalkAnswerBroadcast(input: {
@@ -454,6 +462,7 @@ function queueLateDingTalkAnswerBroadcast(input: {
     dingtalkConversationKey?: string | null;
   };
   comment: { id: string; body: string | null; authorAgentId: string | null };
+  now: Date;
 }) {
   void (async () => {
     const { issue, comment } = input;
@@ -462,11 +471,12 @@ function queueLateDingTalkAnswerBroadcast(input: {
     if (issue.status !== "done") return;
     if (!issue.assigneeAgentId) return;
     if (comment.authorAgentId !== issue.assigneeAgentId) return;
-    const hasTimeoutFallback = await hasConciergeAnswerTimeoutFallbackAfterLatestUserComment({
+    const shouldBroadcast = await shouldBroadcastLateConciergeAnswer({
       svc: input.svc,
       issueId: issue.id,
+      now: input.now,
     });
-    if (!hasTimeoutFallback) return;
+    if (!shouldBroadcast) return;
     await broadcastLateAnswer(
       {
         id: issue.id,
@@ -2804,6 +2814,7 @@ export function issueRoutes(
           body: comment.body ?? null,
           authorAgentId: comment.authorAgentId ?? null,
         },
+        now: new Date(),
       });
       await issueReferencesSvc.syncComment(comment.id);
       const commentReferenceSummaryAfter = await issueReferencesSvc.listIssueReferenceSummary(issue.id);
@@ -3882,6 +3893,7 @@ export function issueRoutes(
         body: comment.body ?? null,
         authorAgentId: comment.authorAgentId ?? null,
       },
+      now: new Date(),
     });
     // Phase 6.1 — broadcast agent's progress comments to its bound DingTalk
     // group (throttled, skipped for Concierge / user-authored / non-assignee).

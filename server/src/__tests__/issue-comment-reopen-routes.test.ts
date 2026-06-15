@@ -1,7 +1,10 @@
 import express from "express";
 import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { CONCIERGE_ANSWER_TIMEOUT_FALLBACK_MARKER } from "../services/concierge-answer-timeout.js";
+import {
+  CONCIERGE_ANSWER_TIMEOUT_FALLBACK_MARKER,
+  CONCIERGE_LATE_ANSWER_DELIVERY_THRESHOLD_MS,
+} from "../services/concierge-answer-timeout.js";
 
 const mockIssueService = vi.hoisted(() => ({
   getById: vi.fn(),
@@ -895,6 +898,93 @@ describe.sequential("issue comment reopen routes", () => {
     expect(mockHeartbeatService.wakeup).not.toHaveBeenCalled();
   });
 
+  it("broadcasts a late DingTalk answer without a fallback marker when the latest user comment exceeded the bot polling window", async () => {
+    const issue = {
+      ...makeIssue("done"),
+      parentId: null,
+      dingtalkConversationKey: "ding-conv-1",
+    };
+    const comment = {
+      id: "comment-late-answer",
+      issueId: issue.id,
+      companyId: issue.companyId,
+      body: "完整答案正文",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      authorAgentId: issue.assigneeAgentId,
+      authorUserId: null,
+    };
+    mockIssueService.getById.mockResolvedValue(issue);
+    mockIssueService.addComment.mockResolvedValue(comment);
+    mockIssueService.listComments.mockResolvedValue([
+      {
+        id: "comment-user",
+        body: "用户问题",
+        authorUserId: "ding-user",
+        authorAgentId: null,
+        createdByRunId: null,
+        createdAt: new Date(Date.now() - CONCIERGE_LATE_ANSWER_DELIVERY_THRESHOLD_MS - 1_000),
+      },
+      comment,
+    ]);
+
+    const res = await request(await installActor(createApp(), agentActor()))
+      .post("/api/issues/11111111-1111-4111-8111-111111111111/comments")
+      .send({ body: "完整答案正文" });
+
+    expect(res.status).toBe(201);
+    await vi.waitFor(() => expect(mockBroadcastLateAnswer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: issue.id,
+        parentId: null,
+        assigneeAgentId: issue.assigneeAgentId,
+        status: "done",
+      }),
+      expect.objectContaining({
+        id: comment.id,
+        body: comment.body,
+        authorAgentId: issue.assigneeAgentId,
+      }),
+    ));
+    expect(mockIssueService.update).not.toHaveBeenCalled();
+    expect(mockHeartbeatService.wakeup).not.toHaveBeenCalled();
+  });
+
+  it("does not broadcast a late DingTalk answer without a fallback marker before the late-answer threshold", async () => {
+    const issue = {
+      ...makeIssue("done"),
+      parentId: null,
+      dingtalkConversationKey: "ding-conv-1",
+    };
+    mockIssueService.getById.mockResolvedValue(issue);
+    mockIssueService.addComment.mockResolvedValue({
+      id: "comment-late-answer",
+      issueId: issue.id,
+      companyId: issue.companyId,
+      body: "完整答案正文",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      authorAgentId: issue.assigneeAgentId,
+      authorUserId: null,
+    });
+    mockIssueService.listComments.mockResolvedValue([
+      {
+        body: "用户问题",
+        authorUserId: "ding-user",
+        createdByRunId: null,
+        createdAt: new Date(Date.now() - 60_000),
+      },
+    ]);
+
+    const res = await request(await installActor(createApp(), agentActor()))
+      .post("/api/issues/11111111-1111-4111-8111-111111111111/comments")
+      .send({ body: "完整答案正文" });
+
+    expect(res.status).toBe(201);
+    await vi.waitFor(() => expect(mockIssueService.listComments).toHaveBeenCalled());
+    expect(mockBroadcastLateAnswer).not.toHaveBeenCalled();
+  });
+
   it("does not broadcast a late DingTalk answer when the timeout fallback predates the latest user comment", async () => {
     const issue = {
       ...makeIssue("done"),
@@ -907,23 +997,26 @@ describe.sequential("issue comment reopen routes", () => {
       issueId: issue.id,
       companyId: issue.companyId,
       body: "完整答案正文",
-      createdAt: new Date("2026-04-22T10:20:00.000Z"),
-      updatedAt: new Date("2026-04-22T10:20:00.000Z"),
+      createdAt: new Date(),
+      updatedAt: new Date(),
       authorAgentId: issue.assigneeAgentId,
       authorUserId: null,
     });
+    // Latest user comment is recent (< late-answer threshold) so only the marker
+    // ordering is under test; the stale fallback predates the user comment, so
+    // neither the marker branch nor the elapsed branch should fire.
     mockIssueService.listComments.mockResolvedValue([
       {
         body: `${CONCIERGE_ANSWER_TIMEOUT_FALLBACK_MARKER}\n\nold fallback`,
         authorUserId: "system",
         createdByRunId: null,
-        createdAt: new Date("2026-04-22T10:00:00.000Z"),
+        createdAt: new Date(Date.now() - 120_000),
       },
       {
         body: "新的用户追问",
         authorUserId: "ding-user",
         createdByRunId: null,
-        createdAt: new Date("2026-04-22T10:10:00.000Z"),
+        createdAt: new Date(Date.now() - 60_000),
       },
     ]);
 
