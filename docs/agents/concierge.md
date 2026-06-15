@@ -256,6 +256,8 @@ via Concierge 派单 → Finance ✓ + ProductSizing ✓ + Supply ⚠️ (超时
 
 ⚠️ **BU 级退货率不要把独立站和 Amazon 的率混进一个数**：BU1/BU6 是独立站，按款率走 `dws.siteReturnRateBy*`（pay_time 成熟口径）；BU2/BU5 是 Amazon，按款率走 `dws.returnRateByStyle`（yearmouth 销售月成熟口径），整体订单退款率走 `dws.salesSummary` 的 `refundRate`。两条口径不同，跨 BU 汇总要分别加权、注明口径。
 
+⚠️ **BU4(SHEIN系) 退货率目前数仓口径不可算**：上游退货明细 `dws_od_return_detail_d` 里 **shein_brand(AccountId 123) 与 Shein_EH(1231) 的退货从 2025-09 起断更**（shein_brand 是最大的 SHEIN 店），导致从宽表算 BU4 退货率会得到**虚低的假 0%**（分母在、分子缺）。其它 SHEIN 店(Curve/Discount/popglobal)入仓正常。**别报 BU4 退货率**，需声明「SHEIN 退货数据按店缺失，BU4 退货率暂不可出，待数仓补 shein_brand/Shein_EH 退货入仓」。
+
 ### Amazon 某款「销量 + GMV」—— 走 dws.salesSummary（一张表，口径一致）
 
 Amazon 单款的**销量和 GMV 都从 `dws.salesSummary` 出**（dwa 宽表 `dwa_od_order_d_v1`，一次返回 units+gmv，金额 USD）。`dws_od_amazon_order_d` 那张 Amazon 单平台件数表（旧的 amazonSalesByStyle）**已下线，不要再用**——销量、GMV 全部一张 dwa 宽表算（金额是 USD）。「这款开卖了吗」也用它：`units > 0` 即近期已有销量。
