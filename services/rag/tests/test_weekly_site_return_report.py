@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import sys
+import types
 from pathlib import Path
 
 
@@ -260,7 +261,8 @@ def test_build_full_site_report_data_uses_mature_timing_window(monkeypatch):
 
     assert calls == [("EPSITEUS", "2025-02-15", None, 120)]
     assert data.timing_metadata["windowStart"] == "2025-02-15"
-    assert data.table2_rows[0]["pct_45plus"] == 0.057
+    subtotal = next(row for row in data.table2_rows if row["styleType"] == "迭代前" and row["isSubtotal"])
+    assert subtotal["pct_45plus"] == 0.057
 
 
 def test_build_full_table1_subtotal_style_type_curve_is_not_low_confidence():
@@ -302,10 +304,255 @@ def test_build_full_table1_subtotal_style_type_curve_is_not_low_confidence():
     assert style_detail["lowConfidence"] is True
 
 
+def test_build_full_rows_use_business_style_type_order():
+    tags = {
+        "AA00001": weekly_site.StyleTag(style_type="迭代前", primary_category=None),
+        "BB00001": weekly_site.StyleTag(style_type="迭代后", primary_category=None),
+        "CC00001": weekly_site.StyleTag(style_type="新款", primary_category=None),
+        "DD00001": weekly_site.StyleTag(style_type="pre-order", primary_category=None),
+    }
+    style_rows = [
+        {"styleCode": "AA00001", "salesQty": 10, "returnQty": 1},
+        {"styleCode": "BB00001", "salesQty": 10, "returnQty": 1},
+        {"styleCode": "CC00001", "salesQty": 10, "returnQty": 1},
+        {"styleCode": "DD00001", "salesQty": 10, "returnQty": 1},
+        {"styleCode": "UNKNOWN", "salesQty": 10, "returnQty": 1},
+    ]
+
+    rows = weekly_site.build_full_table1_rows(style_rows, [], tags, 30)
+
+    assert [row["styleType"] for row in rows if row["isSubtotal"]] == [
+        "老款",
+        "迭代前",
+        "迭代后",
+        "新款",
+        "pre-order",
+    ]
+    assert rows[0]["styleType"] == "老款"
+    assert rows[0]["styleCode"] == "小计"
+    assert rows[1]["styleCode"] == "UNKNOWN"
+
+
 def test_parse_args_full_defaults_false():
     args = weekly_site.parse_args([])
 
     assert args.full is False
+
+
+def _sample_full_site_report_data() -> weekly_site.FullSiteReportData:
+    return weekly_site.FullSiteReportData(
+        site="US",
+        account="EPSITEUS",
+        metadata={
+            "asOfDate": "2026-06-15",
+            "windowStart": "2026-05-01",
+            "windowEnd": "2026-06-01",
+            "coveredThrough": "2026-05-31",
+            "maturityDays": 45,
+        },
+        summary={"salesQty": 100, "returnQty": 20, "returnRate": 0.2},
+        cohort_age_days=30,
+        table1_rows=[
+            {
+                "styleType": "老款",
+                "styleCode": "小计",
+                "returnRate": 0.2,
+                "predictedReturnRate": 0.25,
+                "lowConfidence": False,
+                "isSubtotal": True,
+            },
+            {
+                "styleType": "老款",
+                "styleCode": "EE00001",
+                "returnRate": 0.1,
+                "predictedReturnRate": 0.2,
+                "lowConfidence": True,
+                "isSubtotal": False,
+            },
+        ],
+        table2_rows=[
+            {
+                "styleType": "老款",
+                "styleCode": "小计",
+                "pct_0_30": 0.63,
+                "pct_31_45": 0.313,
+                "pct_45plus": 0.057,
+                "isSubtotal": True,
+            }
+        ],
+        order_unit_rows=[
+            {"unitsBucket": "1", "returnRate": 0.1},
+            {"unitsBucket": "2", "returnRate": 0.2},
+            {"unitsBucket": "3", "returnRate": 0.3},
+            {"unitsBucket": "4", "returnRate": 0.4},
+            {"unitsBucket": "5+", "returnRate": 0.5},
+        ],
+        warehouse_rows=[
+            {
+                "warehouseName": label,
+                "returnShare": 0.125,
+                "returnRate": 0.1,
+            }
+            for label in weekly_site.WAREHOUSE_DISPLAY_ORDER
+        ],
+        dirty_warehouse_pct=0.25,
+        timing_metadata={
+            "windowStart": "2025-02-15",
+            "windowEnd": "2026-02-15",
+            "coveredThrough": "2026-02-14",
+            "maturityDays": 120,
+        },
+    )
+
+
+def test_render_full_markdown_report_matches_business_template():
+    site = _sample_full_site_report_data()
+    data = weekly_site.FullReportData(
+        since="2026-05-01",
+        until="2026-06-01",
+        maturity_days=45,
+        timing_maturity_days=120,
+        sites=[site],
+    )
+
+    _title, markdown = weekly_site.render_full_markdown_report(data)
+
+    assert "| 款式类型 | style | 订单销售日期 | 退款日期 | 当前还原退款率 | 预测还原退款率 |" in markdown
+    assert "| 老款 | 小计 | 2026-05-01 ~ 2026-05-31 | 截至 2026-06-15 | 20.0% | 25.0% |" in markdown
+    assert "| 老款 | EE00001 (lowConfidence) | 2026-05-01 ~ 2026-05-31 | 截至 2026-06-15 | 10.0% | 20.0% |" in markdown
+    assert "| 款式类型 | style | 30天退货占比 | 45天退货占比 | 45天以上退货占比 |" in markdown
+    assert "| 订单 | 订单销售日期 | 退款日期 | 当前还原退款率 |" in markdown
+    assert "| 1件 | 2026-05-01 ~ 2026-05-31 | 截至 2026-06-15 | 10.0% |" in markdown
+    assert "| 5件以上 | 2026-05-01 ~ 2026-05-31 | 截至 2026-06-15 | 50.0% |" in markdown
+    assert "| 发货仓库 | 退货占比 | 当前还原退款率 |" in markdown
+    assert "dirtyWarehousePct=25.0%" in markdown
+    assert "预测还原退款率(beta)：当前还原退款率" in markdown
+    assert "预测还原退款率(beta) |" not in markdown
+    assert "| 订单件数 |" not in markdown
+    assert "| 发货仓 |" not in markdown
+
+
+def test_export_full_report_xlsx_matches_business_template(tmp_path):
+    class FakeCell:
+        def __init__(self, row, column, value=None):
+            self.row = row
+            self.column = column
+            self.value = value
+            self.font = None
+            self.fill = None
+            self.number_format = None
+            self.column_letter = chr(ord("A") + column - 1)
+
+    class FakeWorksheet:
+        def __init__(self, title):
+            self.title = title
+            self._cells = {}
+            self.max_row = 0
+            self.max_column = 0
+            self.column_dimensions = {}
+
+        def cell(self, row, column, value=None):
+            key = (row, column)
+            if key not in self._cells:
+                self._cells[key] = FakeCell(row, column)
+            cell = self._cells[key]
+            if value is not None:
+                cell.value = value
+            self.max_row = max(self.max_row, row)
+            self.max_column = max(self.max_column, column)
+            self.column_dimensions.setdefault(cell.column_letter, types.SimpleNamespace(width=None))
+            return cell
+
+        @property
+        def columns(self):
+            return [
+                [self.cell(row_idx, col_idx) for row_idx in range(1, self.max_row + 1)]
+                for col_idx in range(1, self.max_column + 1)
+            ]
+
+        def values(self):
+            rows = []
+            for row_idx in range(1, self.max_row + 1):
+                values = [self.cell(row_idx, col_idx).value for col_idx in range(1, self.max_column + 1)]
+                while values and values[-1] is None:
+                    values.pop()
+                rows.append(tuple(values))
+            return rows
+
+    class FakeWorkbook:
+        last = None
+
+        def __init__(self):
+            FakeWorkbook.last = self
+            self.active = FakeWorksheet("Sheet")
+            self.sheets = [self.active]
+
+        def remove(self, ws):
+            self.sheets.remove(ws)
+
+        def create_sheet(self, title):
+            ws = FakeWorksheet(title)
+            self.sheets.append(ws)
+            return ws
+
+        def save(self, path):
+            self.saved_path = path
+
+    fake_openpyxl = types.SimpleNamespace(Workbook=FakeWorkbook)
+    fake_styles = types.SimpleNamespace(
+        Font=lambda **kwargs: ("Font", kwargs),
+        PatternFill=lambda *args, **kwargs: ("PatternFill", args, kwargs),
+    )
+    monkeypatch_modules = {
+        "openpyxl": fake_openpyxl,
+        "openpyxl.styles": fake_styles,
+    }
+    original_modules = {name: sys.modules.get(name) for name in monkeypatch_modules}
+    sys.modules.update(monkeypatch_modules)
+
+    data = weekly_site.FullReportData(
+        since="2026-05-01",
+        until="2026-06-01",
+        maturity_days=45,
+        timing_maturity_days=120,
+        sites=[_sample_full_site_report_data()],
+    )
+    path = tmp_path / "full.xlsx"
+
+    try:
+        weekly_site.export_full_report_xlsx(data, path)
+    finally:
+        for name, module in original_modules.items():
+            if module is None:
+                sys.modules.pop(name, None)
+            else:
+                sys.modules[name] = module
+
+    workbook = FakeWorkbook.last
+    assert workbook is not None
+    assert workbook.saved_path == path
+    ws = workbook.sheets[0]
+    rows = ws.values()
+
+    assert ("款式类型", "style", "订单销售日期", "退款日期", "当前还原退款率", "预测还原退款率") in rows
+    table1_header_idx = rows.index(("款式类型", "style", "订单销售日期", "退款日期", "当前还原退款率", "预测还原退款率"))
+    assert rows[table1_header_idx + 1][:6] == ("老款", "小计", "2026-05-01 ~ 2026-05-31", "截至 2026-06-15", 0.2, 0.25)
+    assert rows[table1_header_idx + 2][:6] == (
+        "老款",
+        "EE00001 (lowConfidence)",
+        "2026-05-01 ~ 2026-05-31",
+        "截至 2026-06-15",
+        0.1,
+        0.2,
+    )
+    assert ("款式类型", "style", "30天退货占比", "45天退货占比", "45天以上退货占比") in rows
+    assert ("订单", "订单销售日期", "退款日期", "当前还原退款率") in rows
+    order_header_idx = rows.index(("订单", "订单销售日期", "退款日期", "当前还原退款率"))
+    assert rows[order_header_idx + 1][:4] == ("1件", "2026-05-01 ~ 2026-05-31", "截至 2026-06-15", 0.1)
+    assert rows[order_header_idx + 5][:4] == ("5件以上", "2026-05-01 ~ 2026-05-31", "截至 2026-06-15", 0.5)
+    assert ("发货仓库", "退货占比", "当前还原退款率") in rows
+    warehouse_header_idx = rows.index(("发货仓库", "退货占比", "当前还原退款率"))
+    assert [rows[warehouse_header_idx + idx][0] for idx in range(1, 9)] == list(weekly_site.WAREHOUSE_DISPLAY_ORDER)
 
 
 def test_render_full_markdown_report_describes_timing_training_window():

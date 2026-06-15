@@ -32,7 +32,7 @@ DEFAULT_TOP_STYLES = 10
 DEFAULT_MIN_TOP_STYLE_QTY = 50
 DEFAULT_LOW_SAMPLE_SALES_QTY = 1000
 STYLE_TYPE_ORDER = ("迭代前", "迭代后", "新款", "pre-order", "老款(未分类)")
-FULL_STYLE_TYPE_ORDER = ("迭代前", "迭代后", "新款", "pre-order", "老款")
+FULL_STYLE_TYPE_ORDER = ("老款", "迭代前", "迭代后", "新款", "pre-order")
 STYLE_TAG_PATH = Path(__file__).parent / "site_style_tag.json"
 WAREHOUSE_MAP_PATH = Path(__file__).parent / "site_warehouse_map.json"
 OUTPUT_DIR = Path(__file__).parent / "output"
@@ -1350,6 +1350,16 @@ def inclusive_window_label(metadata: dict[str, Any], fallback_since: str | None 
     return f"{window_start} ~ {covered_through} (含)"
 
 
+def full_order_sales_date_label(metadata: dict[str, Any], fallback_since: str | None = None) -> str:
+    window_start = metadata.get("since") or metadata.get("windowStart") or fallback_since or "-"
+    covered_through = metadata.get("coveredThrough") or covered_through_from_window_end(metadata.get("windowEnd"))
+    return f"{window_start} ~ {covered_through}"
+
+
+def full_refund_date_label(metadata: dict[str, Any]) -> str:
+    return f"截至 {metadata.get('asOfDate') or '-'}"
+
+
 def timing_training_window_note(metadata: dict[str, Any], timing_maturity_days: int) -> str:
     window_start = metadata.get("windowStart") or "-"
     window_end = metadata.get("windowEnd") or "-"
@@ -1525,15 +1535,26 @@ def _full_style_display(row: dict[str, Any]) -> str:
     return style
 
 
-def render_full_table1(rows: list[dict[str, Any]]) -> str:
+def _full_order_units_label(value: Any) -> str:
+    bucket = str(value or "-")
+    return {
+        "1": "1件",
+        "2": "2件",
+        "3": "3件",
+        "4": "4件",
+        "5+": "5件以上",
+    }.get(bucket, bucket)
+
+
+def render_full_table1(rows: list[dict[str, Any]], order_sales_date: str, refund_date: str) -> str:
     return render_table(
-        ["款式类型", "style", "销量", "退量", "当前还原退款率", "预测还原退款率(beta)"],
+        ["款式类型", "style", "订单销售日期", "退款日期", "当前还原退款率", "预测还原退款率"],
         [
             [
                 row.get("styleType") or "-",
                 _full_style_display(row),
-                _qty(row.get("salesQty")),
-                _qty(row.get("returnQty")),
+                order_sales_date,
+                refund_date,
                 _pct(row.get("returnRate")),
                 _pct(row.get("predictedReturnRate")),
             ]
@@ -1544,7 +1565,7 @@ def render_full_table1(rows: list[dict[str, Any]]) -> str:
 
 def render_full_table2(rows: list[dict[str, Any]]) -> str:
     return render_table(
-        ["款式类型", "style", "30天内", "31-45天", "45天以上"],
+        ["款式类型", "style", "30天退货占比", "45天退货占比", "45天以上退货占比"],
         [
             [
                 row.get("styleType") or "-",
@@ -1558,14 +1579,14 @@ def render_full_table2(rows: list[dict[str, Any]]) -> str:
     )
 
 
-def render_full_order_unit_table(rows: list[dict[str, Any]]) -> str:
+def render_full_order_unit_table(rows: list[dict[str, Any]], order_sales_date: str, refund_date: str) -> str:
     return render_table(
-        ["订单件数", "销量", "退量", "当前还原退款率"],
+        ["订单", "订单销售日期", "退款日期", "当前还原退款率"],
         [
             [
-                row.get("unitsBucket") or "-",
-                _qty(row.get("salesQty")),
-                _qty(row.get("returnQty")),
+                _full_order_units_label(row.get("unitsBucket")),
+                order_sales_date,
+                refund_date,
                 _pct(row.get("returnRate")),
             ]
             for row in rows
@@ -1575,12 +1596,10 @@ def render_full_order_unit_table(rows: list[dict[str, Any]]) -> str:
 
 def render_full_warehouse_table(rows: list[dict[str, Any]]) -> str:
     return render_table(
-        ["发货仓", "销量", "退量", "退货占比", "当前还原退款率"],
+        ["发货仓库", "退货占比", "当前还原退款率"],
         [
             [
                 row.get("warehouseName") or "无仓库记录",
-                _qty(row.get("salesQty")),
-                _qty(row.get("returnQty")),
                 _pct(row.get("returnShare")),
                 _pct(row.get("returnRate")),
             ]
@@ -1594,6 +1613,8 @@ def render_full_site_report(data: FullSiteReportData) -> str:
         data.timing_metadata,
         _int(data.timing_metadata.get("maturityDays") or DEFAULT_FULL_TIMING_MATURITY_DAYS),
     )
+    order_sales_date = full_order_sales_date_label(data.metadata)
+    refund_date = full_refund_date_label(data.metadata)
     return "\n\n".join([
         f"## {data.site}",
         render_site_metadata(
@@ -1614,10 +1635,10 @@ def render_full_site_report(data: FullSiteReportData) -> str:
             "**表一：款式类型 × style 还原退款率**\n"
             f"> cohort有效age={data.cohort_age_days if data.cohort_age_days is not None else '-'}天；"
             "lowConfidence 表示该 style 成熟退量样本不足，预测曲线已回退到款式类型或站点。\n"
-            + render_full_table1(data.table1_rows)
+            + render_full_table1(data.table1_rows, order_sales_date, refund_date)
         ),
         "**表二：款式类型 × style 退货时间分布**\n> " + timing_note + "\n" + render_full_table2(data.table2_rows),
-        "**表三A：订单件数分档退货率**\n" + render_full_order_unit_table(data.order_unit_rows),
+        "**表三A：订单件数分档退货率**\n" + render_full_order_unit_table(data.order_unit_rows, order_sales_date, refund_date),
         (
             "**表三B：发货仓退货占比与退货率**\n"
             f"dirtyWarehousePct={_pct(data.dirty_warehouse_pct)}\n\n"
@@ -1703,6 +1724,8 @@ def export_full_report_xlsx(data: FullReportData, path: Path) -> None:
     for site in data.sites:
         ws = wb.create_sheet(_xlsx_safe_sheet_name(site.site))
         row_idx = 1
+        order_sales_date = full_order_sales_date_label(site.metadata, data.since)
+        refund_date = full_refund_date_label(site.metadata)
         ws.cell(row=row_idx, column=1, value=f"{site.site} 独立站退货率明细版")
         row_idx += 2
         meta_headers = ["account", "asOfDate", "cohort窗口", "maturityDays", "cohort有效age", "salesQty", "returnQty", "current退货率"]
@@ -1721,8 +1744,8 @@ def export_full_report_xlsx(data: FullReportData, path: Path) -> None:
             [
                 row.get("styleType") or "-",
                 _full_style_display(row),
-                _float(row.get("salesQty")),
-                _float(row.get("returnQty")),
+                order_sales_date,
+                refund_date,
                 row.get("returnRate"),
                 row.get("predictedReturnRate"),
                 row.get("isSubtotal"),
@@ -1733,7 +1756,7 @@ def export_full_report_xlsx(data: FullReportData, path: Path) -> None:
             ws,
             row_idx,
             "表一：款式类型 × style 还原退款率",
-            ["款式类型", "style", "销量", "退量", "当前还原退款率", "预测还原退款率(beta)"],
+            ["款式类型", "style", "订单销售日期", "退款日期", "当前还原退款率", "预测还原退款率"],
             table1_rows,
             percent_columns={5, 6},
         )
@@ -1752,15 +1775,15 @@ def export_full_report_xlsx(data: FullReportData, path: Path) -> None:
             ws,
             row_idx,
             "表二：款式类型 × style 退货时间分布",
-            ["款式类型", "style", "30天内", "31-45天", "45天以上"],
+            ["款式类型", "style", "30天退货占比", "45天退货占比", "45天以上退货占比"],
             table2_rows,
             percent_columns={3, 4, 5},
         )
         order_rows = [
             [
-                row.get("unitsBucket") or "-",
-                _float(row.get("salesQty")),
-                _float(row.get("returnQty")),
+                _full_order_units_label(row.get("unitsBucket")),
+                order_sales_date,
+                refund_date,
                 row.get("returnRate"),
             ]
             for row in site.order_unit_rows
@@ -1769,15 +1792,13 @@ def export_full_report_xlsx(data: FullReportData, path: Path) -> None:
             ws,
             row_idx,
             "表三A：订单件数分档退货率",
-            ["订单件数", "销量", "退量", "当前还原退款率"],
+            ["订单", "订单销售日期", "退款日期", "当前还原退款率"],
             order_rows,
             percent_columns={4},
         )
         warehouse_rows = [
             [
                 row.get("warehouseName") or "-",
-                _float(row.get("salesQty")),
-                _float(row.get("returnQty")),
                 row.get("returnShare"),
                 row.get("returnRate"),
             ]
@@ -1789,9 +1810,9 @@ def export_full_report_xlsx(data: FullReportData, path: Path) -> None:
             ws,
             row_idx,
             "表三B：发货仓退货占比与退货率",
-            ["发货仓", "销量", "退量", "退货占比", "当前还原退款率"],
+            ["发货仓库", "退货占比", "当前还原退款率"],
             warehouse_rows,
-            percent_columns={4, 5},
+            percent_columns={2, 3},
         )
         for column_cells in ws.columns:
             max_len = 0
