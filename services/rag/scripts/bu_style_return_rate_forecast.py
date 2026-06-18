@@ -268,6 +268,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--min-qty", type=int, default=DEFAULT_MIN_QTY,
                         help="低于此成熟月件数的款标「样本不足」")
     parser.add_argument("--out", type=Path, default=None, help="xlsx 输出路径")
+    parser.add_argument("--may-out", type=Path, default=None,
+                        help="未成熟月(如5月)单月独立 xlsx 输出路径")
     args = parser.parse_args(argv)
 
     today = date.today()
@@ -327,6 +329,9 @@ def main(argv: list[str] | None = None) -> int:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     wb = Workbook()
     wb.remove(wb.active)
+    # 未成熟月（如 5 月）单月独立工作簿：实际销量 + 成熟率还原预测
+    wb_may = Workbook()
+    wb_may.remove(wb_may.active)
 
     print(f"# BU × 款号 还原退货率预测（成熟月观测口径）")
     print(f"- asOf: {today.isoformat()}  | 成熟月: {window_label}  | maturityDays={args.maturity_days}\n")
@@ -382,15 +387,15 @@ def main(argv: list[str] | None = None) -> int:
         )
 
         imm_map = info["imm_styles"]
+        rest_rows = None
+        rest_headers = ["款式类型", "款号", f"{imm_label}销量(件)", "已观测退货(件)",
+                        "已观测退货率", "还原退货率", "预测最终退货(件)"]
         if imm_months and imm_map:
             rest_rows = build_restoration_table_rows(style_map, imm_map, style_tags, bu_rate, args.min_qty)
             _xlsx_write_table(
                 ws, row_idx,
                 f"还原退货预测：{imm_label} 实际销量 × 成熟退货率（未成熟月退货未回齐，按销量降序，每组先小计）",
-                ["款式类型", "款号", f"{imm_label}销量(件)", "已观测退货(件)",
-                 "已观测退货率", "还原退货率", "预测最终退货(件)"],
-                rest_rows,
-                percent_columns={5, 6},
+                rest_headers, rest_rows, percent_columns={5, 6},
             )
         for column_cells in ws.columns:
             max_len = 0
@@ -400,10 +405,46 @@ def main(argv: list[str] | None = None) -> int:
                     max_len = max(max_len, len(str(cell.value)))
             ws.column_dimensions[col].width = min(max(max_len + 2, 10), 40)
 
+        # ---- 5 月单月独立工作簿（每 BU 一 Sheet）----
+        if rest_rows is not None:
+            wsm = wb_may.create_sheet(bu[:31])
+            ri = 1
+            wsm.cell(row=ri, column=1, value=f"{bu} {imm_label} 单月退货（实际销量 + 成熟率还原预测）")
+            ri += 1
+            imm_qty = sum(v["qty"] for v in imm_map.values())
+            imm_obs = sum(v["rf"] for v in imm_map.values())
+            imm_pred = sum(r[6] for r in rest_rows if len(r) == 8 and r[-1])  # 各组小计的预测件之和
+            wsm.cell(row=ri, column=1, value=(
+                f"{imm_label} 实际销量 {imm_qty:,} 件；已观测退货 {imm_obs:,} 件"
+                f"（{imm_obs/imm_qty*100:.1f}%，未成熟、退货未回齐故偏低）；"
+                f"按成熟退货率还原 → 预测最终退货 {imm_pred:,} 件（{imm_pred/imm_qty*100:.1f}%）。"
+                if imm_qty else f"{imm_label} 无销量数据。"))
+            ri += 1
+            wsm.cell(row=ri, column=1, value=(
+                "注：「预测最终退货」=各款 " + imm_label + " 销量 × 该款成熟退货率(Feb-Apr，样本不足回退BU池化率)；"
+                "勿与财务「退货件数」直接对比——财务按退货发生月计，此处按销售月归集。"))
+            ri += 2
+            ri = _xlsx_write_table(
+                wsm, ri,
+                f"{imm_label} 款式类型 × 款号（按销量降序，每组先小计）",
+                rest_headers, rest_rows, percent_columns={5, 6},
+            )
+            for column_cells in wsm.columns:
+                max_len = 0
+                col = column_cells[0].column_letter
+                for cell in column_cells:
+                    if cell.value is not None:
+                        max_len = max(max_len, len(str(cell.value)))
+                wsm.column_dimensions[col].width = min(max(max_len + 2, 10), 40)
+
     if not wb.sheetnames:
         wb.create_sheet("空")
     wb.save(out_path)
     print(f"\n→ Excel: {out_path}")
+    if wb_may.sheetnames:
+        may_path = args.may_out or (OUTPUT_DIR / f"bu_style_may_{imm_label or today.isoformat()}.xlsx")
+        wb_may.save(may_path)
+        print(f"→ {imm_label} 单月 Excel: {may_path}")
     return 0
 
 
