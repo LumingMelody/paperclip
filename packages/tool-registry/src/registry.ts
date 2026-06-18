@@ -1,5 +1,5 @@
 import type { ExecutionContext } from "./context.js";
-import type { ZodSchema } from "zod";
+import type { ZodType, ZodTypeDef } from "zod";
 import { briefParseDescriptor } from "./tools/admin/briefParse.js";
 import { costsRollupDescriptor } from "./tools/admin/costsRollup.js";
 import { decisionsSearchDescriptor } from "./tools/admin/decisionsSearch.js";
@@ -33,6 +33,9 @@ import { dormantB2bCustomersDescriptor } from "./tools/oms/dormantB2bCustomers.j
 import { inventoryByWarehouseDescriptor } from "./tools/oms/inventoryByWarehouse.js";
 import { adAccountSummaryDescriptor } from "./tools/meta/adAccountSummary.js";
 import { adsetPerformanceDescriptor } from "./tools/meta/adsetPerformance.js";
+import { insightsDescriptor } from "./tools/meta/insights.js";
+import { listAdsDescriptor } from "./tools/meta/listAds.js";
+import { listCampaignsDescriptor } from "./tools/meta/listCampaigns.js";
 import { toolCallsSearchDescriptor } from "./tools/meta/toolCallsSearch.js";
 import { getProductDescriptor } from "./tools/shopify/getProduct.js";
 import { listProductsByCollectionDescriptor } from "./tools/shopify/listProductsByCollection.js";
@@ -49,8 +52,8 @@ export interface ToolDescriptor<I = unknown, O = unknown> {
   source: string;
   description: string;
   readOnly: true;
-  inputSchema: ZodSchema<I>;
-  outputSchema?: ZodSchema<O>;
+  inputSchema: ZodType<I, ZodTypeDef, unknown>;
+  outputSchema?: ZodType<O, ZodTypeDef, unknown>;
   requiredSecrets?: string[];
   handler(ctx: ExecutionContext, input: I): Promise<O>;
 }
@@ -91,6 +94,9 @@ export const tools: ToolDescriptor[] = [
   listLocationsDescriptor,
   adAccountSummaryDescriptor,
   adsetPerformanceDescriptor,
+  insightsDescriptor,
+  listCampaignsDescriptor,
+  listAdsDescriptor,
   getOrderDescriptor,
   listOrdersUpdatedSinceDescriptor,
   decisionsSearchDescriptor,
